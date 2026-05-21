@@ -1,0 +1,1545 @@
+// src/components/ParentProfile.jsx
+
+import React, { useEffect, useRef, useState, useCallback } from 'react';
+
+import { motion } from "framer-motion";
+import { X, Loader2 } from "lucide-react";
+import DatePicker from "react-datepicker";
+import Select from "react-select";
+import "react-datepicker/dist/react-datepicker.css";
+import { format } from "date-fns";
+import { useBookFreeTrial } from '../../../../contexts/BookAFreeTrialContext';
+import Loader from '../../../../contexts/Loader';
+import { usePermission } from '../../../../Common/permission';
+import List from '../../Book a Membership/list';
+import { showSuccess, showError, showConfirm, showWarning } from '../../../../../../../utils/swalHelper';
+import { useNavigate } from 'react-router-dom';
+import { FaEdit, FaSave } from "react-icons/fa";
+import { useNotification } from '../../../../contexts/NotificationContext';
+import PhoneInput from 'react-phone-input-2';
+import Comments from '../../../../Common/Comments';
+import { useEmail } from '../../../../contexts/messages/SendEmailContext';
+import PhoneNumberInput from '../../../../Common/PhoneNumberInput';
+import { useTextPopup } from '../../../../contexts/messages/SendTextContext';
+
+const ParentProfile = ({ ParentProfile }) => {
+    const { serviceHistoryFetchById } = useBookFreeTrial();
+    const [textloading, setTextLoading] = useState(null);
+    const { openEmailPopup } = useEmail();
+    const [transferVenue, setTransferVenue] = useState(false);
+    const [selectedStudents, setSelectedStudents] = useState([]);
+    const [cancelErrors, setCancelErrors] = useState({});
+    const { openTextPopup } = useTextPopup();
+
+    const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+    const [selectedDate, setSelectedDate] = useState(null);
+    const navigate = useNavigate();
+    const [editingIndex, setEditingIndex] = useState(null);
+    const { loading, cancelFreeTrial, sendCancelFreeTrialmail, rebookFreeTrialsubmit, noMembershipSubmit, updateBookFreeTrialsFamily, transferTrialSubmit, setComment, comment, fetchComments, commentsList, handleSubmitComment, loadingComment } = useBookFreeTrial() || {};
+
+    const [currentPage, setCurrentPage] = useState(1);
+    const commentsPerPage = 5; // Number of comments per page
+    console.log('ParentProfile', ParentProfile)
+    // Pagination calculations
+    const indexOfLastComment = currentPage * commentsPerPage;
+    const indexOfFirstComment = indexOfLastComment - commentsPerPage;
+    const currentComments = commentsList.slice(indexOfFirstComment, indexOfLastComment);
+    const totalPages = Math.ceil(commentsList.length / commentsPerPage);
+    const { adminInfo, setAdminInfo } = useNotification();
+    const token = localStorage.getItem("adminToken");
+
+    const goToPage = (page) => {
+        if (page < 1) page = 1;
+        if (page > totalPages) page = totalPages;
+        setCurrentPage(page);
+    };
+    const [emergencyContacts, setEmergencyContacts] = useState([]);
+
+    useEffect(() => {
+        const emergency = ParentProfile?.emergency;
+
+        if (Array.isArray(emergency)) {
+            setEmergencyContacts(emergency);
+        } else if (emergency) {
+            // agar single object aata hai
+            setEmergencyContacts([emergency]);
+        } else {
+            setEmergencyContacts([]);
+        }
+    }, [ParentProfile]);
+    const [editingEmergency, setEditingEmergency] = useState(null);
+    const [showRebookTrial, setshowRebookTrial] = useState(false);
+    const [showCancelTrial, setshowCancelTrial] = useState(false);
+    const [noMembershipSelect, setNoMembershipSelect] = useState(false);
+
+    const [selectedTime, setSelectedTime] = useState(null);
+    const [additionalNote, setAdditionalNote] = useState("");
+
+    const [reason, setReason] = useState("");
+    const reasonOptions = [
+        { value: "Family emergency - cannot attend", label: "Family emergency - cannot attend" },
+        { value: "Health issue", label: "Health issue" },
+        { value: "Schedule conflict", label: "Schedule conflict" },
+        { value: "other", label: "Other reason" },
+    ];
+    const formatTimeAgo = (timestamp) => {
+        const now = new Date();
+        const past = new Date(timestamp);
+        const diff = Math.floor((now - past) / 1000); // in seconds
+
+        if (diff < 60) return `${diff} sec${diff !== 1 ? 's' : ''} ago`;
+        if (diff < 3600) return `${Math.floor(diff / 60)} min${Math.floor(diff / 60) !== 1 ? 's' : ''} ago`;
+        if (diff < 86400) return `${Math.floor(diff / 3600)} hour${Math.floor(diff / 3600) !== 1 ? 's' : ''} ago`;
+        if (diff < 604800) return `${Math.floor(diff / 86400)} day${Math.floor(diff / 86400) !== 1 ? 's' : ''} ago`;
+
+        // fallback: return exact date if older than 7 days
+        return past.toLocaleDateString("en-GB", {
+            day: "2-digit",
+            month: "short",
+            year: "numeric",
+        });
+    };
+    const handleCancel = () => {
+        let errors = {};
+        if (selectedStudents.length === 0) {
+            errors.students = "Please select at least one student to cancel.";
+        }
+
+        if (!formData.cancelReason) {
+            errors.reason = "Please select a reason for cancellation.";
+        }
+
+        if (formData.cancelReason === "other" && !formData.otherReason?.trim()) {
+            errors.otherReason = "Please enter the reason for cancellation.";
+        }
+
+        if (Object.keys(errors).length > 0) {
+            setCancelErrors(errors);
+            return;
+        }
+
+        setCancelErrors({});
+
+        const payload = {
+            ...formData,
+            studentIds: selectedStudents.map(student => student.id),
+            cancelReason:
+                formData.cancelReason === "other"
+                    ? formData.otherReason
+                    : formData.cancelReason,
+        };
+
+        console.log("Payload:", payload);
+        cancelFreeTrial(payload);
+    };
+
+
+    const handleStudentSelect = (student) => {
+        setSelectedStudents((prev) => {
+            const exists = prev.find((s) => s.id === student.id);
+
+            if (exists) {
+                return prev.filter((s) => s.id !== student.id);
+            } else {
+                return [...prev, student];
+            }
+        });
+    };
+    const commentData = {
+        commentBy: ParentProfile?.parentAdminId,
+        commentType: "free",
+        serviceType: "weekly class",
+    }
+    const payload = {
+        comment: comment,
+        commentType: "free",
+        serviceType: "weekly class",
+        commentBy: ParentProfile?.parentAdminId, // ensure correct ID
+    };
+    useEffect(() => {
+        fetchComments(commentData);
+    }, [])
+
+
+
+    const formatDate = (dateString, withTime = false) => {
+        if (!dateString) return "-";
+        const date = new Date(dateString);
+        const options = {
+            year: "numeric",
+            month: "short",
+            day: "2-digit",
+        };
+        if (withTime) {
+            return (
+                date.toLocaleDateString("en-US", options) +
+                ", " +
+                date.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })
+            );
+        }
+        return date.toLocaleDateString("en-US", options);
+    };
+
+    const {
+        id,
+        bookingId,
+        trialDate,
+        bookedBy,
+        status,
+        createdAt,
+        students,
+        venueId,
+        classSchedule,
+        paymentPlans,
+    } = ParentProfile;
+
+    const studentsList = ParentProfile?.students || [];
+
+    const hearOptions = [
+        { value: "Google", label: "Google" },
+        { value: "Facebook", label: "Facebook" },
+        { value: "Instagram", label: "Instagram" },
+        { value: "Friend", label: "Friend" },
+        { value: "Flyer", label: "Flyer" },
+    ];
+    const [cancelWaitingList, setCancelWaitingList] = useState({
+        bookingId: id,
+        noMembershipReason: "",           // corresponds to DatePicker
+        noMembershipNotes: "",        // textarea
+    });
+    const [rebookFreeTrial, setRebookFreeTrial] = useState({
+        bookingId: id || null,
+        trialDate: "",
+        reasonForNonAttendance: "",
+        additionalNote: "",
+    });
+
+
+    const sendText = async (id) => {
+        setTextLoading(true);
+
+        const headers = {
+            "Content-Type": "application/json",
+        };
+        // console.log('bookingIds', bookingIds)
+        if (token) {
+            headers["Authorization"] = `Bearer ${token}`;
+        }
+        try {
+            const response = await fetch(`${API_BASE_URL}/api/admin/book/free-trials/send-text`, {
+                method: "POST",
+                headers,
+                body: JSON.stringify({
+                    bookingId: id, // make sure bookingIds is an array like [96, 97]
+                }),
+            });
+
+            const result = await response.json();
+
+            if (!response.ok) {
+                throw new Error(result.message || "Failed to send text");
+            }
+
+            await showSuccess("Success!", result.message || "Text has been sent successfully.");
+
+            return result;
+
+        } catch (error) {
+            console.error("Error sending Text:", error);
+            await showError("Error", error.message || "Something went wrong while sending text.");
+            throw error;
+        } finally {
+            // navigate(`/weekly-classes/all-members/list`);
+            await serviceHistoryFetchById(id);
+            setTextLoading(false);
+        }
+    };
+    const [parents, setParents] = useState(ParentProfile.parents || []);
+    const [formData, setFormData] = useState({
+        bookingId: id,
+        cancelReason: "",
+        additionalNote: "",
+    });
+    const studentCount = students?.length || 0;
+    const matchedPlan = paymentPlans?.find(plan => plan.students === studentCount);
+    const emergency = ParentProfile.emergency;
+    console.log('trialDate', trialDate)
+
+    const { checkPermission } = usePermission();
+    const [transferData, setTransferData] = useState({
+        bookingId: bookingId || null,
+        venueId: classSchedule?.venue?.id || null,
+        transferReasonClass: "", // optional notes
+        classScheduleId: null,
+        selectedStudents: [],
+        studentTransfers: {},
+    });
+    const canCancelTrial =
+        checkPermission({ module: 'cancel-free-trial', action: 'create' })
+    const canRebooking =
+        checkPermission({ module: 'rebooking', action: 'create' })
+
+    const handleDateChange = (date) => {
+        setSelectedDate(date);
+        setRebookFreeTrial((prev) => ({
+            ...prev,
+            trialDate: date ? date.toISOString().split("T")[0] : "",
+        }));
+    };
+
+    const handleReasonChange = (selectedOption) => {
+        setReason(selectedOption);
+        setRebookFreeTrial((prev) => ({
+            ...prev,
+            reasonForNonAttendance: selectedOption ? selectedOption.value : "",
+        }));
+    };
+    const handleStudentSelectChange = (selectedOptions) => {
+        setTransferData((prev) => {
+            const newTransfers = { ...prev.studentTransfers };
+            // Initialize config for new selections if not exists
+            selectedOptions?.forEach(opt => {
+                if (!newTransfers[opt.value]) {
+                    newTransfers[opt.value] = {
+                        classScheduleId: null,
+                        transferReasonClass: ""
+                    };
+                }
+            });
+            // Optional: clean up removed students? Keeping them is safer for now or we can delete.
+            // Let's keep it simple.
+            return {
+                ...prev,
+                selectedStudents: selectedOptions || [],
+                studentTransfers: newTransfers
+            };
+        });
+    };
+    const handleRadioChange = (value, field, stateSetter) => {
+        stateSetter((prev) => ({ ...prev, [field]: value }));
+    };
+    const [waitingListData, setWaitingListData] = useState({
+        bookingId: bookingId,
+        venueId: classSchedule?.venue?.id || null,
+        startDate: null,
+        notes: "",
+        selectedStudents: [],
+        studentConfigs: {},
+    });
+
+    const newClasses = ParentProfile?.newClasses?.map((cls) => ({
+        value: cls.id,
+        label: `${cls.className} - (${cls.startTime} - ${cls.endTime})`,
+    }));
+    const selectedClass = newClasses?.find(
+        (cls) => cls.value === waitingListData?.classScheduleId
+    );
+
+    const handleNoteChange = (e) => {
+        setAdditionalNote(e.target.value);
+        setRebookFreeTrial((prev) => ({
+            ...prev,
+            additionalNote: e.target.value,
+        }));
+    };
+    const handleInputChange = (e, stateSetter) => {
+        const { name, value } = e.target;
+        stateSetter((prev) => ({ ...prev, [name]: value }));
+    };
+
+    const handleStudentDataChange = (index, field, value) => {
+        const updatedStudents = [...students];
+        updatedStudents[index] = {
+            ...updatedStudents[index],
+            [field]: value,
+        };
+        setStudents(updatedStudents);
+    };
+    const hasAnyAttended = students?.some(
+        (s) => s.studentStatus === "attended"
+    );
+    const handleDataChange = (index, field, value) => {
+        const updatedParents = [...parents];
+        updatedParents[index][field] = value;
+        setParents(updatedParents);
+    };
+    const handleEmergencyChange = (index, field, value) => {
+        const updated = [...emergencyContacts];
+        updated[index][field] = value;
+        setEmergencyContacts(updated);
+    };
+
+    // ✅ Parent edit/save toggle
+    const toggleEditParent = (index) => {
+        if (editingIndex === index) {
+            // 🔹 Save Mode
+            setEditingIndex(null);
+
+            const payload = students.map((student, sIndex) => ({
+                id: student.id ?? sIndex + 1,
+                studentFirstName: student.studentFirstName,
+                studentLastName: student.studentLastName,
+                dateOfBirth: student.dateOfBirth,
+                age: student.age,
+                gender: student.gender,
+                medicalInformation: student.medicalInformation,
+                parents: parents.map((p, pIndex) => ({
+                    id: p.id ?? pIndex + 1,
+                    ...p,
+                })),
+                emergencyContacts: emergencyContacts.map((e, eIndex) => ({
+                    id: e.id ?? eIndex + 1,
+                    ...e,
+                })),
+            }));
+
+            updateBookFreeTrialsFamily(ParentProfile.id, payload);
+            console.log("Parent Payload to send:", payload);
+        } else {
+            // 🔹 Edit Mode
+            setEditingIndex(index);
+        }
+    };
+
+    // ✅ Emergency edit/save toggle
+    const toggleEditEmergency = (index) => {
+        if (editingEmergency === index) {
+            // 🔹 Save Mode
+            setEditingEmergency(null);
+
+            const payload = students.map((student, sIndex) => ({
+                id: student.id ?? sIndex + 1,
+                studentFirstName: student.studentFirstName,
+                studentLastName: student.studentLastName,
+                dateOfBirth: student.dateOfBirth,
+                age: student.age,
+                gender: student.gender,
+                medicalInformation: student.medicalInformation,
+                parents: parents.map((p, pIndex) => ({
+                    id: p.id ?? pIndex + 1,
+                    ...p,
+                })),
+                emergencyContacts: emergencyContacts.map((e, eIndex) => ({
+                    id: e.id ?? eIndex + 1,
+                    ...e,
+                })),
+            }));
+
+            updateBookFreeTrialsFamily(ParentProfile.id, payload);
+            console.log("Emergency Payload to send:", payload);
+        } else {
+            // 🔹 Edit Mode
+            setEditingEmergency(index);
+        }
+    };
+    const handleTransferConfigChange = (studentId, field, value) => {
+        setTransferData(prev => ({
+            ...prev,
+            studentTransfers: {
+                ...prev.studentTransfers,
+                [studentId]: {
+                    ...prev.studentTransfers[studentId],
+                    [field]: value
+                }
+            }
+        }));
+    };
+    const handleSelectChange = (selected, field, stateSetter) => {
+        stateSetter((prev) => ({ ...prev, [field]: selected?.value || null }));
+    };
+    const formatStatus = (status) => {
+        if (!status) return "-";
+        return status
+            .split("_")           // split by underscore
+            .map(word => word.charAt(0).toUpperCase() + word.slice(1)) // capitalize first letter
+            .join(" ");           // join with space
+    };
+    const handleBookMembership = () => {
+
+        // Navigate to your component/route
+        navigate("/weekly-classes/find-a-class/book-a-membership", {
+            state: { TrialData: ParentProfile, comesFrom: "trials", startmembership: "startmembership", mainBookingId: ParentProfile?.id },
+        });
+
+    };
+    const handleReBooktrial = () => {
+        showConfirm(
+            "Are you sure?",
+            "Do you want to re book the trial?",
+            "Yes, Book it!"
+        ).then((result) => {
+            if (result.isConfirmed) {
+                // Navigate to your component/route
+                navigate("/weekly-classes/find-a-class/book-a-free-trial", {
+                    state: { TrialData: ParentProfile, comesFrom: "trials", useofRebook: "useofRebook", mainBookingId: ParentProfile?.id },
+                });
+            }
+        });
+    };
+
+    if (loading) return <Loader />;
+    console.log('parents', parents)
+    return (
+        <>
+            <div className="md:flex w-full gap-4">
+                <div className="transition-all duration-300 flex-1 md:w-8/12 md:w-8/12">
+
+                    <div className="space-y-6">
+                        {parents.map((parent, index) => (
+                            <div
+                                key={index}
+                                className="bg-white p-6 mb-10 rounded-3xl shadow-sm space-y-6 relative"
+                            >
+                                {/* Header + Pencil/Save */}
+                                <div className="flex justify-between items-start">
+                                    <h2 className="text-[20px] font-semibold">Parent information</h2>
+                                    {/* <button
+                                        onClick={() => toggleEditParent(index)}
+                                        className="text-gray-600 hover:text-blue-600"
+                                    >
+                                        {editingIndex === index ? <FaSave /> : <FaEdit />}
+                                    </button> */}
+                                </div>
+
+                                {/* First/Last Name */}
+                                <div className="flex gap-4">
+                                    <div className="w-1/2">
+                                        <label className="block text-[16px] font-semibold">First name</label>
+                                        <input
+                                            className="w-full mt-2 border border-gray-300 rounded-xl px-4 py-3 text-base"
+                                            value={parent.parentFirstName}
+                                            readOnly={editingIndex !== index}
+                                            onChange={(e) =>
+                                                handleDataChange(index, "parentFirstName", e.target.value)
+                                            }
+                                        />
+                                    </div>
+                                    <div className="w-1/2">
+                                        <label className="block text-[16px] font-semibold">Last name</label>
+                                        <input
+                                            className="w-full mt-2 border border-gray-300 rounded-xl px-4 py-3 text-base"
+                                            value={parent.parentLastName}
+                                            readOnly={editingIndex !== index}
+                                            onChange={(e) =>
+                                                handleDataChange(index, "parentLastName", e.target.value)
+                                            }
+                                        />
+                                    </div>
+                                </div>
+
+                                {/* Email + Phone */}
+                                <div className="flex gap-4">
+                                    <div className="w-1/2">
+                                        <label className="block text-[16px] font-semibold">Email</label>
+                                        <input
+                                            type="email"
+                                            className="w-full mt-2 border border-gray-300 rounded-xl px-4 py-3 text-base"
+                                            value={parent.parentEmail}
+                                            readOnly={editingIndex !== index}
+                                            onChange={(e) =>
+                                                handleDataChange(index, "parentEmail", e.target.value)
+                                            }
+                                        />
+                                    </div>
+                                    <div className="w-1/2">
+                                        <label className="block text-[16px] font-semibold">Phone number</label>
+
+                                        <PhoneNumberInput
+                                            value={parent.parentPhoneNumber}
+                                            readOnly={editingIndex !== index}
+                                            onChange={(e) =>
+                                                handleDataChange(index, "parentPhoneNumber", e.target.value)
+                                            }
+                                            placeholder="Enter phone number"
+                                        />
+
+                                    </div>
+                                </div>
+
+                                {/* Relation + How Did You Hear */}
+                                <div className="flex gap-4">
+                                    <div className="w-1/2">
+                                        <label className="block text-[16px] font-semibold">What’s the main reason you’re interested in Samba Soccer Schools?</label>
+                                        <input
+                                            className="w-full mt-2 border border-gray-300 rounded-xl px-4 py-3 text-base"
+                                            value={parent.interestReason}
+                                            readOnly={editingIndex !== index}
+                                            onChange={(e) =>
+                                                handleDataChange(index, "interestReason", e.target.value)
+                                            }
+                                        />
+                                    </div>
+                                    <div className="w-1/2">
+                                        <label className="block text-[16px] font-semibold mb-6  ">
+                                            Tell us a bit more (optional)
+                                        </label>
+                                        <input
+                                            className="w-full mt-2 border border-gray-300 rounded-xl px-4 py-3 text-base"
+                                            value={parent.interestReasonOther}
+                                            readOnly={editingIndex !== index}
+                                            onChange={(e) =>
+                                                handleDataChange(index, "interestReasonOther", e.target.value)
+                                            }
+                                        />
+                                    </div>
+                                </div>
+                                <div className="flex gap-4">
+                                    <div className="w-1/2">
+                                        <label className="block text-[16px] font-semibold">Relation to child</label>
+                                        <input
+                                            className="w-full mt-2 border border-gray-300 rounded-xl px-4 py-3 text-base"
+                                            value={parent.relationToChild}
+                                            readOnly={editingIndex !== index}
+                                            onChange={(e) =>
+                                                handleDataChange(index, "relationToChild", e.target.value)
+                                            }
+                                        />
+                                    </div>
+                                    <div className="w-1/2">
+                                        <label className="block text-[16px] font-semibold">
+                                            How did you hear about us?
+                                        </label>
+                                        <select
+                                            className="w-full mt-2 border border-gray-300 rounded-xl px-4 py-3 text-base"
+                                            value={parent.howDidYouHear}
+                                            readOnly={editingIndex !== index}
+                                            disabled={editingIndex !== index}
+                                            onChange={(e) =>
+                                                handleDataChange(index, "howDidYouHear", e.target.value)
+                                            }
+                                        >
+                                            {hearOptions.map((option) => (
+                                                <option key={option.value} value={option.value}>
+                                                    {option.label}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                </div>
+
+                            </div>
+                        ))}
+                    </div>
+                    {emergencyContacts?.map((emergency, index) => (
+                        <div key={index} className="bg-white p-6 rounded-3xl shadow-sm space-y-6">
+                            <div className="flex justify-between items-start">
+                                <h2 className="text-[20px] font-semibold">Emergency contact details</h2>
+                                {/* <button
+                                    onClick={() => toggleEditEmergency(index)}
+                                    className="text-gray-600 hover:text-blue-600"
+                                >
+                                    {editingEmergency === index ? <FaSave /> : <FaEdit />}
+                                </button> */}
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                                <input type="checkbox" checked={emergency.sameAsAbove} readOnly disabled />
+                                <label className="text-base font-semibold text-gray-700">
+                                    Fill same as above
+                                </label>
+                            </div>
+
+                            {/* First / Last Name */}
+                            <div className="flex gap-4">
+                                <div className="w-1/2">
+                                    <label className="block text-[16px] font-semibold">First name</label>
+                                    <input
+                                        className="w-full mt-2 border border-gray-300 rounded-xl px-4 py-3 text-base"
+                                        value={emergency.emergencyFirstName}
+                                        readOnly={editingEmergency !== index}
+                                        onChange={(e) =>
+                                            handleEmergencyChange(index, "emergencyFirstName", e.target.value)
+                                        }
+                                    />
+                                </div>
+                                <div className="w-1/2">
+                                    <label className="block text-[16px] font-semibold">Last name</label>
+                                    <input
+                                        className="w-full mt-2 border border-gray-300 rounded-xl px-4 py-3 text-base"
+                                        value={emergency.emergencyLastName}
+                                        readOnly={editingEmergency !== index}
+                                        onChange={(e) =>
+                                            handleEmergencyChange(index, "emergencyLastName", e.target.value)
+                                        }
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Phone / Relation */}
+                            <div className="flex gap-4">
+                                <div className="w-1/2">
+                                    <label className="block text-[16px] font-semibold">Phone number</label>
+
+                                    <PhoneNumberInput
+                                        value={emergency.emergencyPhoneNumber}
+                                        readOnly={editingEmergency !== index}
+                                        onChange={(e) =>
+                                            handleEmergencyChange(index, "emergencyPhoneNumber", e.target.value)
+                                        }
+                                        placeholder="Enter phone number"
+                                    />
+
+                                </div>
+                                <div className="w-1/2">
+                                    <label className="block text-[16px] font-semibold">Relation to child</label>
+                                    <input
+                                        className="w-full mt-2 border border-gray-300 rounded-xl px-4 py-3 text-base"
+                                        value={emergency.emergencyRelation}
+                                        readOnly={editingEmergency !== index}
+                                        onChange={(e) =>
+                                            handleEmergencyChange(index, "emergencyRelation", e.target.value)
+                                        }
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                    ))}
+                    <Comments
+                        adminInfo={adminInfo}
+                        comment={comment}
+                        setComment={setComment}
+                        handleSubmitComment={() => handleSubmitComment(payload, commentData)}
+                        loadingComment={loadingComment}
+                        commentsList={commentsList}
+                        currentComments={currentComments}
+                        formatTimeAgo={formatTimeAgo}
+                    />
+                </div>
+                <div className="max-h-fit rounded-full md:w-4/12 text-base space-y-5">
+                    {/* Card Wrapper */}
+                    <div className="rounded-3xl bg-[#2E2F3E] overflow-hidden shadow-md border border-gray-200">
+                        {/* Header */}
+                        <div className="] m-2 px-6 rounded-3xl py-3 flex items-center justify-between bg-no-repeat bg-center"
+                            style={{
+                                backgroundImage: status === "cancelled"
+                                    ? "url('/frames/Cancelled.png')"
+                                    : status === "frozen"
+                                        ? "url('/frames/Frozen.png')"
+                                        : status === "active"
+                                            ? "url('/frames/Active.png')"
+                                            : status === "waiting list"
+                                                ? "url('/frames/Waiting.png')"
+                                                : "url('/frames/Pending.png')",
+
+
+                                backgroundSize: "cover",
+                            }}>
+                            <div>
+                                <div className="text-[20px] font-bold text-[#1F2937]">Account Status</div>
+                                <div className="text-[16px] font-semibold text-[#1F2937]">Trials</div>
+                            </div>
+                            <div className="w-max bg-[#343A40] flex items-center gap-2  text-white text-[14px] px-3 py-2 rounded-xl">
+                                <div className="flex items-center gap-2">
+                                    {status === 'pending' && (
+                                        <img src="/images/icons/loadingWhite.png" alt="Pending" />
+                                    )}
+                                    {status === 'not attended' && (
+                                        <img src="/images/icons/x-circle-contained.png" alt="Not Attended" />
+                                    )}
+                                    {status === 'attended' && (
+                                        <img src="/images/icons/attendedicon.png" alt="Attended" />
+                                    )}
+                                    {status === 'cancelled' && (
+                                        <img src="/images/icons/x-circle-contained.png" alt="Cancelled" />
+                                    )}
+
+                                    {/* Fallback for any other or undefined status */}
+                                    {!status && (
+                                        <>
+                                            <img src="/images/icons/x-circle-contained.png" alt="Not Attended" />
+                                            Not Attended
+                                        </>
+                                    )}
+
+                                    {/* Status text */}
+                                    <span className="capitalize">
+                                        {status ? status.replaceAll("_", " ") : "Unknown"}
+                                    </span>
+                                </div>
+
+                            </div>
+                        </div>
+
+                        <div className="bg-[#2E2F3E] text-white px-6 py-6 space-y-6">
+                            {/* Avatar & Account Holder */}
+                            <div className="flex items-center gap-4">
+                                <img
+                                    src={
+                                        ParentProfile?.bookedByAdmin?.profile || ParentProfile?.bookedBy?.profile
+                                            ? `${ParentProfile?.bookedByAdmin?.profile || ParentProfile?.bookedBy?.profile}`
+                                            : "https://cdn-icons-png.flaticon.com/512/147/147144.png"
+                                    }
+                                    alt="avatar"
+                                    className="w-18 h-18 rounded-full"
+                                    onError={(e) => {
+                                        e.currentTarget.src = "https://cdn-icons-png.flaticon.com/512/147/147144.png"; // fallback if image fails to load
+                                    }}
+                                />
+                                <div>
+                                    <div className="text-[24px] font-semibold leading-tight">
+                                        {status === 'pending' || status === 'attended'
+                                            ? 'Booked By'
+                                            : 'Account Holder'}
+                                    </div>
+                                    <div className="text-[16px] text-gray-300">
+                                        {status === 'pending' || status === 'attended'
+                                            ? [bookedBy?.firstName, bookedBy?.lastName].filter(Boolean).join(' ') || '-'
+                                            : ParentProfile?.parents?.[0]
+                                                ? `${ParentProfile.parents[0]?.parentFirstName ?? '-'} / ${ParentProfile.parents[0]?.relationToChild ?? '-'}`
+                                                : '-'}
+
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Details */}
+                            <div className="space-y">
+                                <div>
+                                    <div className="text-[20px] font-bold tracking-wide">Venue</div>
+                                    <div className="inline-block bg-[#007BFF] text-white text-[14px] px-3 py-1 rounded-md my-2">
+                                        {ParentProfile?.venue?.name || "-"}
+                                    </div>
+                                </div>
+
+                                <div className="border-t border-[#495362] py-5">
+
+                                    <>
+                                        <div className="text-[20px] text-white">Students</div>
+                                        <div className="text-[16px] mt-1 text-gray-400">{students?.length || 0}</div>
+                                    </>
+
+
+                                </div>
+
+                                <div className="border-t border-[#495362] py-5">
+                                    {status === 'pending' || status === 'attended' ? (
+                                        <>
+                                            <div className=" text-[20px] text-white">Booking Date</div>
+                                            <div className="text-[16px]  mt-1 text-gray-400"> {formatDate(createdAt, true)}</div>
+
+                                        </>
+                                    ) : (
+                                        <>
+
+                                            <div className=" text-[20px] text-white">Date of Booking</div>
+                                            <div className="text-[16px]  mt-1 text-gray-400"> {formatDate(createdAt, true)}</div>
+                                        </>
+                                    )}
+
+                                </div>
+
+                                <div className="border-t border-[#495362] py-5">
+                                    <div className=" text-[20px] text-white">Date of Trial</div>
+                                    <div className="text-[16px]  mt-1 text-gray-400">{formatDate(trialDate)}</div>
+                                </div>
+
+                                <>
+                                    <div className="border-t border-[#495362] py-5">
+                                        <div className=" text-[20px] text-white">Booking Source</div>
+                                        <div className="text-[16px]  mt-1 text-gray-400"> {bookedBy?.firstName} {bookedBy?.lastName}</div>
+                                    </div>
+                                </>
+
+                            </div>
+                        </div>
+
+
+
+                    </div>
+                    {status !== 'cancelled' && (
+                        <>
+                            <div className="bg-white rounded-3xl p-6  space-y-4 mt-4">
+
+                                {/* Top Row: Email + Text */}
+                                <div className="flex gap-7">
+
+                                    <button className="flex-1 border border-[#717073] rounded-xl py-3 flex text-[18px] items-center justify-center hover:shadow-md transition-shadow duration-300 gap-2 text-[#717073] font-medium" onClick={() => {
+                                        const parentEmails = parents.map(p => p.parentEmail).filter(Boolean);
+                                        openEmailPopup(parentEmails, "/api/admin/send-manual-email", { token, showError, showSuccess });
+                                    }}>
+                                        Send Email
+                                    </button>
+
+                                    <button disabled={textloading}
+                                        onClick={() => {
+                                            const formattedParents = parents
+                                                .filter(p => p.parentPhoneNumber)
+                                                .map(p => ({
+                                                    name: `${p.parentFirstName || ""} ${p.parentLastName || ""}`.trim(),
+                                                    phone: p.parentPhoneNumber
+                                                }));
+
+                                            if (formattedParents.length > 0) {
+                                                openTextPopup(
+                                                    formattedParents,
+                                                    "/api/admin/send-manual-text",
+                                                    { token, showError, showSuccess }
+                                                );
+                                            } else {
+                                                showWarning(
+                                                    "No Phone Numbers",
+                                                    "Selected parents do not have valid phone numbers."
+                                                );
+                                            }
+                                        }}
+                                        className="flex-1 border border-[#717073] rounded-xl py-3 flex  text-[18px] items-center justify-center gap-2 hover:shadow-md transition-shadow duration-300 text-[#717073] font-medium">
+                                        <img src="/images/icons/sendText.png" alt="" />
+                                        {textloading ? (
+                                            <Loader2 className="animate-spin w-5 h-5 text-blue-500" />
+                                        ) : (
+                                            <>
+                                                Send Text
+                                            </>
+                                        )}
+                                    </button>
+                                </div>
+
+
+                                {status?.trim().toLowerCase() == "pending" ||
+                                    status?.trim().toLowerCase() == "not attended" ||
+                                    status?.trim().toLowerCase() == "not attended" &&
+                                    status?.trim().toLowerCase() !== "attended" &&
+                                    status?.trim().toLowerCase() !== "no_membership" &&
+                                    status?.trim().toLowerCase() !== "rebooked" &&
+                                    canRebooking &&
+                                    (() => {
+                                        const today = new Date();
+                                        const trialDateObj = new Date(trialDate);
+                                        return trialDateObj <= today; // ✅ show only if date has passed
+                                    })() && (
+                                        <button
+                                            onClick={() => setshowRebookTrial(true)}
+                                            className="w-full bg-blue-50 border border-blue-400 text-blue-600 text-[18px] rounded-xl py-3 hover:bg-blue-100 hover:shadow-md transition-all duration-300 font-medium"
+                                        >
+                                            Rebook FREE Trial
+                                        </button>
+                                    )}
+
+
+
+                                {status === 'not attended' && (
+                                    <button
+                                        onClick={handleReBooktrial}
+                                        className="w-full bg-blue-50 border border-blue-400 text-blue-600 text-[18px] rounded-xl py-3 hover:bg-blue-100 hover:shadow-md transition-all duration-300 font-medium"
+                                    >
+                                        Rebook FREE Trial
+                                    </button>
+                                )}
+                                {status !== 'attended' && canCancelTrial && (
+                                    <button
+                                        onClick={() => setshowCancelTrial(true)}
+                                        className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-red-50 text-[#B42318] border border-red-200 rounded-xl hover:bg-red-100 transition-colors font-semibold"
+                                    >
+                                        Cancel Trial
+                                    </button>
+                                )}
+
+                                <div className="flex gap-7">
+                                    {status !== 'not attended' && (
+                                        <button
+                                            onClick={() => setNoMembershipSelect(true)}
+                                            className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-red-50 text-[#B42318] border border-red-200 rounded-xl hover:bg-red-100 transition-colors font-semibold"
+                                        >
+                                            Declined Membership
+                                        </button>
+                                    )}
+                                    <button
+                                        onClick={handleBookMembership}
+                                        className="flex-1 border bg-[#24956003] border-[#12B76A] rounded-xl py-3 flex text-[18px]  items-center justify-center gap-2 hover:shadow-md transition-shadow duration-300 text-[#12B76A]  font-medium"
+                                    >
+                                        Start Membership
+                                    </button>
+                                </div>
+
+
+
+                                {/* {(status === "attended" || (status === "request_to_cancel" && canCancelTrial)) && ( */}
+                                {/* <button
+                                    onClick={() => setTransferVenue(true)}
+                                    className="w-full bg-green-50 border border-green-400 text-green-600 text-[18px] rounded-xl py-3 hover:bg-green-100 hover:shadow-md transition-all duration-300 font-medium"
+                                >
+                                    Transfer Class
+                                </button> */}
+
+                                {/* )} */}
+                            </div>
+                        </>
+                    )}
+
+
+
+
+
+                </div>
+                {showRebookTrial && (
+                    <div className="fixed inset-0 bg-[#00000066] flex justify-center items-center z-50">
+                        <div className="bg-white rounded-2xl w-[541px] max-h-[90%] overflow-y-auto relative scrollbar-hide">
+                            <button
+                                className="absolute top-4 left-4 p-2"
+                                onClick={() => setshowRebookTrial(false)}
+                            >
+                                <img src="/images/icons/cross.png" alt="Close" />
+                            </button>
+
+                            <div className="text-center py-6 border-b border-gray-300">
+                                <h2 className="font-semibold text-[24px]">Rebook Free Trial</h2>
+                            </div>
+
+                            <div className="space-y-4 px-6 pb-6 pt-4">
+                                {/* Venue */}
+                                <div>
+                                    <label className="block text-[16px] font-semibold">Venue</label>
+                                    <input
+                                        type="text"
+                                        className="w-full mt-2 border border-gray-300 rounded-xl px-4 py-3 text-base"
+                                        placeholder="Select Venue"
+                                        value={classSchedule?.venue?.name || ParentProfile?.venue?.name}
+                                        readOnly
+                                    />
+                                </div>
+
+                                {/* Class */}
+                                <div>
+                                    <label className="block text-[16px] font-semibold">Class/Level</label>
+                                    <input
+                                        type="text"
+                                        className="w-full mt-2 border border-gray-300 rounded-xl px-4 py-3 text-base"
+                                        placeholder="Select Class"
+                                        value={
+                                            students?.length > 1
+                                                ? students
+                                                    .map(
+                                                        (s) =>
+                                                            `${s.studentFirstName} ${s.studentLastName} (${s?.classSchedule?.className || "-"})`
+                                                    )
+                                                    .join(", ")
+                                                : students?.[0]?.classSchedule?.className || "-"
+                                        }
+                                        readOnly
+                                    />
+                                </div>
+
+                                {/* Date */}
+                                <div>
+                                    <label className="block text-[16px] font-semibold">Date</label>
+                                    <DatePicker
+                                        withPortal
+                                        selected={selectedDate}
+                                        onChange={handleDateChange}
+                                        dateFormat="EEEE, dd MMMM yyyy"
+                                        placeholderText="Select a date"
+                                        className="w-full mt-2 border border-gray-300 rounded-xl px-4 py-3 text-base"
+                                    />
+                                </div>
+
+                                {/* Time */}
+                                <div className="space-y-4">
+                                    <div>
+                                        <label className="block text-[16px] font-semibold">Time</label>
+                                        <input
+                                            type="text"
+                                            className="w-full mt-2 border border-gray-300 rounded-xl px-4 py-3 text-base"
+                                            placeholder="Select Time"
+                                            value={
+                                                students?.length > 1
+                                                    ? students
+                                                        .map(
+                                                            (s) =>
+                                                                `${s.studentFirstName} ${s.studentLastName} (${s?.classSchedule?.startTime || "-"})`
+                                                        )
+                                                        .join(", ")
+                                                    : students?.[0]?.classSchedule?.startTime || "-"
+                                            }
+                                            readOnly
+                                        />
+                                        {/* <DatePicker
+                                            withPortal
+                                            selected={selectedTime}
+                                            onChange={setSelectedTime}
+                                            showTimeSelect
+                                            showTimeSelectOnly
+                                            timeIntervals={60}
+                                            timeCaption="Time"
+                                            dateFormat="h:mm aa"
+                                            placeholderText="Select Time"
+                                            className="w-full mt-2 border border-gray-300 rounded-xl px-4 py-3 text-base"
+                                        /> */}
+                                    </div>
+
+                                    {/* Reason */}
+                                    <div>
+                                        <label className="block text-[16px] font-semibold">
+                                            Reason for Non-Attendance
+                                        </label>
+                                        <Select
+                                            value={reason}
+                                            onChange={handleReasonChange}
+                                            options={reasonOptions}
+                                            placeholder="Select Reason"
+                                            className="rounded-lg mt-2"
+                                            styles={{
+                                                control: (base) => ({
+                                                    ...base,
+                                                    borderRadius: "0.7rem",
+                                                    boxShadow: "none",
+                                                    padding: "4px 8px",
+                                                    minHeight: "48px",
+                                                }),
+                                                placeholder: (base) => ({ ...base, fontWeight: 600 }),
+                                                dropdownIndicator: (base) => ({ ...base, color: "#9CA3AF" }),
+                                                indicatorSeparator: () => ({ display: "none" }),
+                                            }}
+                                        />
+                                    </div>
+                                </div>
+
+                                {/* Additional Notes */}
+                                <div>
+                                    <label className="block text-[16px] font-semibold">Additional Notes (Optional)</label>
+                                    <textarea
+                                        className="w-full mt-2 border border-gray-300 rounded-xl px-4 py-3 text-base"
+                                        rows={3}
+                                        placeholder="Add any notes here..."
+                                        value={additionalNote}
+                                        onChange={handleNoteChange}
+                                    />
+                                </div>
+
+                                {/* Buttons */}
+                                <div className="flex gap-4 pt-4">
+                                    <button
+                                        className="flex-1 border border-gray-400 rounded-xl py-3 text-[18px] font-medium hover:shadow-md transition-shadow"
+                                        onClick={() => setshowRebookTrial(false)}
+                                    >
+                                        Cancel
+                                    </button>
+
+                                    <button
+                                        className="w-1/2 bg-[#237FEA] text-white rounded-xl py-3 text-[18px] font-medium hover:shadow-md transition-shadow"
+                                        onClick={() => {
+                                            if (!selectedDate) {
+                                                showWarning("Please select a date first!");
+                                                return;
+                                            }
+
+                                            if (!reason) {
+                                                showWarning("Please select a reason for non-attendance!");
+                                                return;
+                                            }
+
+                                            // ✅ Proceed only if both selectedDate and reason exist
+                                            rebookFreeTrialsubmit(rebookFreeTrial);
+                                        }}
+                                    >
+                                        Rebook Trial
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                )}
+                {transferVenue && (
+                    <div className="fixed inset-0 bg-[#00000066] flex justify-center items-center z-50">
+                        <div className="bg-white rounded-2xl w-[541px] max-h-[90%] overflow-y-auto relative scrollbar-hide">
+                            <button
+                                className="absolute top-4 left-4 p-2"
+                                onClick={() => setTransferVenue(false)}
+                            >
+                                <img src="/images/icons/cross.png" alt="Close" />
+                            </button>
+
+                            <div className="text-center py-6 border-b border-gray-300">
+                                <h2 className="font-semibold text-[24px]">Transfer Class Form</h2>
+                            </div>
+
+                            <div className="space-y-4 px-6 pb-6 pt-4">
+                                {/* Current Class / Level */}
+
+                                <div>
+
+
+                                    <label className="block text-[16px] font-semibold">
+                                        Select Student
+                                    </label>
+
+                                    <Select
+                                        value={transferData.selectedStudents}
+                                        onChange={handleStudentSelectChange}
+                                        options={studentsList?.map((student) => ({
+                                            value: student.id,
+                                            label: student.studentFirstName + " " + student.studentLastName,
+                                            classSchedule: student.classSchedule
+                                        })) || []}
+                                        placeholder="Select Student"
+                                        isMulti
+                                        className="rounded-lg mt-2"
+                                        styles={{
+                                            control: (base) => ({
+                                                ...base,
+                                                borderRadius: "0.7rem",
+                                                boxShadow: "none",
+                                                padding: "4px 8px",
+                                                minHeight: "48px",
+                                            }),
+                                            placeholder: (base) => ({ ...base, fontWeight: 600 }),
+                                            dropdownIndicator: (base) => ({ ...base, color: "#9CA3AF" }),
+                                            indicatorSeparator: () => ({ display: "none" }),
+                                        }}
+                                    />
+
+                                </div>
+                                {/* Per-Student Configuration */}
+                                {transferData.selectedStudents.length > 0 && (
+                                    <div className="space-y-6 border-t pt-4">
+                                        {transferData.selectedStudents.map((studentOption) => {
+                                            const studentId = studentOption.value;
+                                            const studentConfig = transferData.studentTransfers?.[studentId] || {};
+                                          const currentClass = `${studentOption.classSchedule?.className || "-"} ${studentOption.classSchedule?.level || studentOption.abilityLevel ? `(${studentOption.classSchedule?.level || studentOption.abilityLevel})` : ""}`;
+                                            const currentVenue = studentOption.classSchedule?.venue?.name || "-";
+                                            console.log('transferData', transferData)
+                                            console.log('studentConfig', studentConfig)
+                                            console.log('studentOption', studentOption)
+                                            return (
+                                                <div key={studentId} className="bg-gray-50 p-4 rounded-xl space-y-3 border border-gray-200">
+                                                    <h3 className="font-semibold capitalize text-lg text-gray-800  pb-2">
+                                                        {studentOption.label}
+                                                    </h3>
+
+                                                    {/* Current Info */}
+                                                    {/* Current Info */}
+                                                    <div className="grid gap-4 text-sm text-gray-600">
+
+                                                        <div>
+                                                            <label className="block text-sm font-semibold mb-1">Venue</label>
+                                                            <input
+                                                                type="text"
+                                                                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-gray-100"
+                                                                value={ParentProfile?.venue?.name}
+                                                                readOnly
+                                                            />
+                                                        </div>
+                                                        <div>
+                                                            <label className="block text-sm font-semibold mb-1">Current Class / Level</label>
+                                                            <input
+                                                                type="text"
+                                                                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-gray-100"
+                                                                value={currentClass}
+                                                                readOnly
+                                                            />
+                                                        </div>
+                                                    </div>
+
+                                                    {/* New Class Select */}
+                                                    <div>
+                                                        <label className="block text-sm font-semibold mb-1">New Class / Level</label>
+                                                        <Select
+                                                            value={
+                                                                studentConfig.classScheduleId
+                                                                    ? newClasses.find((cls) => cls.value === studentConfig.classScheduleId) || null
+                                                                    : null
+                                                            }
+                                                            onChange={(selected) =>
+                                                                handleTransferConfigChange(studentId, "classScheduleId", selected?.value)
+                                                            }
+                                                            options={newClasses}
+                                                            placeholder="Select New Class / Level"
+                                                            className="rounded-lg"
+                                                            styles={{
+                                                                control: (base) => ({
+                                                                    ...base,
+                                                                    borderRadius: "0.5rem",
+                                                                    minHeight: "40px",
+                                                                }),
+                                                            }}
+                                                        />
+                                                    </div>
+
+                                                    {/* Reason */}
+                                                    <div>
+                                                        <label className="block text-sm font-semibold mb-1">Reason for Transfer</label>
+                                                        <textarea
+                                                            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                                                            rows={2}
+                                                            placeholder="Reason for transfer"
+                                                            value={studentConfig.transferReasonClass || ""}
+                                                            onChange={(e) => handleTransferConfigChange(studentId, "transferReasonClass", e.target.value)}
+                                                        />
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+
+
+
+                                {/* Buttons */}
+                                <div className="flex gap-4 pt-4 justify-end">
+
+
+                                    <button
+                                        className="w-1/2 bg-[#237FEA] text-white rounded-xl py-3 text-[18px] font-medium hover:shadow-md transition-shadow disabled:opacity-50 disabled:cursor-not-allowed"
+                                        disabled={transferData.selectedStudents.length === 0}
+                                        onClick={() => {
+                                            if (!transferData.selectedStudents.length) {
+                                                showWarning("Missing Information", "Please select at least one student.");
+                                                return;
+                                            }
+
+
+                                            // Construct Payload
+                                            const transfers = transferData.selectedStudents.map(studentOption => {
+                                                const config = transferData.studentTransfers?.[studentOption.value] || {};
+                                                return {
+                                                    studentId: studentOption.value,
+                                                    classScheduleId: config.classScheduleId,
+                                                    transferReasonClass: config.transferReasonClass
+                                                };
+                                            });
+
+                                            // Validation: Check if any student is missing a class selection
+                                            const incomplete = transfers.some(t => !t.classScheduleId);
+                                            if (incomplete) {
+                                                showWarning("Missing Information", "Please select a new class for all selected students.");
+                                                return;
+                                            }
+
+                                            const payload = {
+                                                id: ParentProfile?.id,
+                                                transfers: transfers
+                                            };
+
+                                            transferTrialSubmit(payload, 'allMembers');
+                                        }}
+                                    >
+                                        Submit Transfer
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+                {showCancelTrial && (
+                    <div className="fixed inset-0 bg-[#00000066] flex justify-center items-center z-50">
+                        <div className="bg-white rounded-2xl w-[541px] max-h-[90%] overflow-y-auto relative scrollbar-hide">
+                            <button
+                                className="absolute top-4 left-4 p-2"
+                                onClick={() => setshowCancelTrial(false)}
+                            >
+                                <img src="/images/icons/cross.png" alt="Close" />
+                            </button>
+
+                            <div className="text-center py-6 border-b border-gray-300">
+                                <h2 className="font-semibold text-[24px]">Cancel Free Trial</h2>
+                            </div>
+
+                            <div className="space-y-4 px-6 pb-6 pt-4">
+                                <div>
+                                    <label className="block text-[16px] font-semibold">
+                                        Select Students to Cancel <span className="text-[#F04438]">*</span>
+                                    </label>
+
+                                    <div className={`mt-3 space-y-2 p-3 rounded-xl border ${cancelErrors.students ? "border-[#F04438]" : "border-transparent"}`}>
+                                        {studentsList.map((student) => {
+                                            const isCancelled = student.studentStatus === "cancelled";
+
+                                            return (
+                                                <label
+                                                    key={student.id}
+                                                    className={`flex items-center space-x-3 ${isCancelled ? "cursor-not-allowed opacity-50" : "cursor-pointer"}`}
+                                                >
+                                                    <input
+                                                        type="checkbox"
+                                                        disabled={isCancelled}
+                                                        checked={selectedStudents.some((s) => s.id === student.id)}
+                                                        onChange={() => {
+                                                            if (!isCancelled) {
+                                                                handleStudentSelect({
+                                                                    id: student.id,
+                                                                    studentFirstName: student.studentFirstName,
+                                                                    studentLastName: student.studentLastName,
+                                                                });
+
+                                                                setCancelErrors((prev) => ({
+                                                                    ...prev,
+                                                                    students: "",
+                                                                }));
+                                                            }
+                                                        }}
+                                                        className="w-4 h-4"
+                                                    />
+                                                    <span className="text-[15px]">
+                                                        {student.studentFirstName} {student.studentLastName}
+                                                        {isCancelled && " (Already Cancelled)"}
+                                                    </span>
+                                                </label>
+                                            );
+                                        })}
+                                    </div>
+                                    {cancelErrors.students && (
+                                        <p className="text-[#F04438] text-sm mt-1">{cancelErrors.students}</p>
+                                    )}
+                                </div>
+                                {/* Reason */}
+                                <div>
+                                    <label className="block text-[16px] font-semibold">
+                                        Reason for Cancellation <span className="text-[#F04438]">*</span>
+                                    </label>
+                                    <Select
+                                        value={reasonOptions.find((opt) => opt.value === formData.cancelReason)}
+                                        onChange={(selected) => {
+                                            setFormData((prev) => ({ ...prev, cancelReason: selected.value }));
+                                            setCancelErrors((prev) => ({ ...prev, reason: "" }));
+                                        }}
+                                        options={reasonOptions}
+                                        placeholder=""
+                                        className="rounded-lg mt-2"
+                                        styles={{
+                                            control: (base) => ({
+                                                ...base,
+                                                borderRadius: "0.7rem",
+                                                boxShadow: "none",
+                                                padding: "4px 8px",
+                                                minHeight: "48px",
+                                                borderColor: cancelErrors.reason ? "#EF4444" : base.borderColor,
+                                                "&:hover": {
+                                                    borderColor: cancelErrors.reason ? "#EF4444" : base.borderColor,
+                                                }
+                                            }),
+                                            placeholder: (base) => ({ ...base, fontWeight: 600 }),
+                                            dropdownIndicator: (base) => ({ ...base, color: "#9CA3AF" }),
+                                            indicatorSeparator: () => ({ display: "none" }),
+                                        }}
+                                    />
+                                    {cancelErrors.reason && (
+                                        <p className="text-[#F04438] text-sm mt-1">{cancelErrors.reason}</p>
+                                    )}
+                                    {formData.cancelReason === "other" && (
+                                        <>
+                                            <input
+                                                type="text"
+                                                placeholder="Enter your reason"
+                                                value={formData.otherReason}
+                                                onChange={(e) => {
+                                                    setFormData((prev) => ({
+                                                        ...prev,
+                                                        otherReason: e.target.value,
+                                                    }));
+                                                    setCancelErrors((prev) => ({ ...prev, otherReason: "" }));
+                                                }}
+                                                className={`w-full border rounded-lg px-3 py-2 mt-3 ${cancelErrors.otherReason ? "border-[#F04438]" : "border-gray-300"}`}
+                                            />
+                                            {cancelErrors.otherReason && (
+                                                <p className="text-[#F04438] text-sm mt-1">{cancelErrors.otherReason}</p>
+                                            )}
+                                        </>
+                                    )}
+                                </div>
+
+                                {/* Notes */}
+                                <div>
+                                    <label className="block text-[16px] font-semibold">
+                                        Additional Notes (Optional)
+                                    </label>
+                                    <textarea
+                                        className="w-full bg-gray-100 mt-2 border border-gray-300 rounded-xl px-4 py-3 text-base"
+                                        rows={3}
+                                        value={formData.additionalNote}
+                                        onChange={(e) =>
+                                            setFormData((prev) => ({ ...prev, additionalNote: e.target.value }))
+                                        }
+                                        placeholder=""
+                                    />
+                                </div>
+
+                                {/* Buttons */}
+                                <div className="flex justify-end gap-4 pt-4">
+                                    <button
+                                        onClick={handleCancel}
+                                        className="w-1/2 bg-[#fef2f2] text-white rounded-xl py-3 text-[18px] font-medium hover:shadow-md transition-shadow"
+                                    >
+                                        Cancel Trial
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                )}
+                {noMembershipSelect && (
+                    <div className="fixed inset-0 bg-[#00000066] flex justify-center items-center z-50">
+                        <div className="bg-white rounded-2xl w-[541px] max-h-[90%] overflow-y-auto relative scrollbar-hide">
+                            <button
+                                className="absolute top-4 left-4 p-2"
+                                onClick={() => setNoMembershipSelect(false)}
+                            >
+                                <img src="/images/icons/cross.png" alt="Close" />
+                            </button>
+
+                            <div className="text-center py-6 border-b border-gray-300">
+                                <h2 className="font-semibold text-[24px]">Declined Membership  </h2>
+                            </div>
+
+                            <div className="space-y-4 px-6 pb-6 pt-4">
+                                <div>
+                                    <label className="block text-[16px] font-semibold">
+                                        Reason for Declining Membership
+                                    </label>
+                                    <Select
+                                        value={reasonOptions.find((opt) => opt.value === cancelWaitingList.noMembershipReason)}
+                                        onChange={(selected) => handleSelectChange(selected, "noMembershipReason", setCancelWaitingList)}
+                                        options={reasonOptions}
+                                        placeholder=""
+                                        className="rounded-lg mt-2"
+                                        styles={{
+                                            control: (base) => ({
+                                                ...base,
+                                                borderRadius: "0.7rem",
+                                                boxShadow: "none",
+                                                padding: "6px 8px",
+                                                minHeight: "48px",
+                                            }),
+                                            placeholder: (base) => ({ ...base, fontWeight: 600 }),
+                                            dropdownIndicator: (base) => ({ ...base, color: "#9CA3AF" }),
+                                            indicatorSeparator: () => ({ display: "none" }),
+                                        }}
+                                    />
+                                </div>
+
+                                {/* Notes */}
+                                <div>
+                                    <label className="block text-[16px] font-semibold">
+                                        Additional Notes (Optional)
+                                    </label>
+                                    <textarea
+                                        className="w-full bg-gray-100  mt-2 border border-gray-300 rounded-xl px-4 py-3 text-base"
+                                        rows={6}
+                                        name="noMembershipNotes"    // <-- MUST match state key
+                                        value={cancelWaitingList.noMembershipNotes}
+                                        onChange={(e) => handleInputChange(e, setCancelWaitingList)}
+                                        placeholder=""
+                                    />
+                                </div>
+
+                                {/* Buttons */}
+                                <div className="flex justify-end gap-4 pt-4">
+                                    <button
+                                        onClick={() => noMembershipSubmit(cancelWaitingList, 'allMembers')}
+
+                                        className="w-1/2 flex items-center justify-center gap-2 px-4 py-3 bg-red-50 text-[#B42318] border border-red-200 rounded-xl hover:bg-red-100 transition-colors font-semibold"
+                                    >
+                                        Submit
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                )}
+            </div >
+        </>
+    );
+};
+
+export default ParentProfile;

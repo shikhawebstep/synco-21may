@@ -1,0 +1,2365 @@
+import React, { useEffect, useRef, useState, useCallback } from 'react';
+// import Create from './Create';
+import { useNavigate } from 'react-router-dom';
+import { Check, Loader2 } from "lucide-react";
+import PlanTabs from '../PlanTabs';
+
+// import Loader from '../../../../contexts/Loader';
+import { useVenue } from '../../../contexts/VenueContext';
+import { usePayments } from '../../../contexts/PaymentPlanContext';
+import { showSuccess, showError, showWarning, showConfirm } from '../../../../../../utils/swalHelper';
+import { format, parseISO } from "date-fns";
+import { motion, AnimatePresence } from "framer-motion";
+import { X } from "lucide-react"; // Optional: Use any icon or ✖️ if no icon lib
+import { ChevronDown, ChevronUp, Info, CheckCircle2 } from "lucide-react";
+
+import { evaluate } from 'mathjs';
+
+import { FiSearch } from "react-icons/fi";
+import { ChevronLeft, ChevronRight } from "lucide-react";
+import PhoneInput from "react-phone-input-2";
+import 'react-phone-input-2/lib/style.css';
+import DatePicker from "react-datepicker";
+import Select from "react-select";
+import { useLocation } from 'react-router-dom';
+import { useClassSchedule } from '../../../contexts/ClassScheduleContent';
+
+import 'react-datepicker/dist/react-datepicker.css';
+import 'react-phone-input-2/lib/style.css';
+import { useBookFreeTrial } from '../../../contexts/BookAFreeTrialContext';
+import { useMembers } from '../../../contexts/MemberContext';
+import { useNotification } from '../../../contexts/NotificationContext';
+import Loader from '../../../contexts/Loader';
+import Comments from '../../../Common/Comments';
+import PhoneNumberInput from '../../../Common/PhoneNumberInput';
+
+const List = () => {
+    useEffect(() => {
+        window.scrollTo(0, 0); // scrolls to top on mount
+    }, []);
+    const [studentRemoved, setStudentRemoved] = useState(false);
+    const [selectedVenue, setSelectedVenue] = useState(null);
+    const [expression, setExpression] = useState('');
+    const [result, setResult] = useState('');
+    const [isPrefilled, setIsPrefilled] = useState(false);
+
+    const navigate = useNavigate();
+    const location = useLocation();
+    const { classId, existingparentid, TrialData, comesFrom, mainBookingId, from_lead, leadId, useofRebook } = location.state || {};
+    const popup1Ref = useRef(null);
+    const popup2Ref = useRef(null);
+    const popup3Ref = useRef(null);
+    const img3Ref = useRef(null); // add a ref for the image
+    const img1Ref = useRef(null); // add a ref for the image
+    const img2Ref = useRef(null);
+    const { pathname } = useLocation();
+    const [isOpen, setIsOpen] = useState(false);
+    const { fetchFindClassID, singleClassSchedulesOnly, loading } = useClassSchedule() || {};
+    const { createBookFreeTrials, isBooked, setIsBooked, fetchMembershipByParent, parentData, submitAllComments, createBookFreeTrialsByWaitingList, createReBookFreeTrials } = useBookFreeTrial()
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const { keyInfoData, fetchKeyInfo } = useMembers();
+    const { adminInfo, setAdminInfo } = useNotification();
+
+    const [studentErrors, setStudentErrors] = useState([]);
+    const [parentErrors, setParentErrors] = useState([]);
+    const [emergencyErrors, setEmergencyErrors] = useState({});
+    const [trialErrors, setTrialErrors] = useState({});
+    const [students, setStudents] = useState([
+        {
+            studentFirstName: '',
+            studentLastName: '',
+            dateOfBirth: null,
+            age: '',
+            gender: '',
+            medicalInformation: '',
+            selectedClassId: null,
+            selectedClassData: null,
+            initialClassId: null
+            // Add other fields if needed
+        },
+    ]);
+
+    console.log('students',students)
+    const [activePopup, setActivePopup] = useState(null);
+    const togglePopup = (id) => {
+        setActivePopup((prev) => (prev === id ? null : id));
+    };
+    const [tempComments, setTempComments] = useState([]);
+
+    const [showModal, setShowModal] = useState(false);
+    const [selectedPlans, setSelectedPlans] = useState([]);
+    const [commentsList, setCommentsList] = useState([]);
+    const [loadingComment, setLoadingComment] = useState(false);
+    const [comment, setComment] = useState('');
+    const [currentPage, setCurrentPage] = useState(1);
+    const commentsPerPage = 5; // Number of comments per page
+    const [selectedClassId, setSelectedClassId] = useState(null);
+
+    // Pagination calculations
+    const indexOfLastComment = currentPage * commentsPerPage;
+    const indexOfFirstComment = indexOfLastComment - commentsPerPage;
+    const currentComments = commentsList.slice(indexOfFirstComment, indexOfLastComment);
+    const totalPages = Math.ceil(commentsList.length / commentsPerPage);
+    const finalClassId =
+        selectedClassId ||
+        classId ||
+        TrialData?.classScheduleId ||
+        TrialData?.students?.[0]?.classSchedule?.id; const goToPage = (page) => {
+            if (page < 1) page = 1;
+            if (page > totalPages) page = totalPages;
+            setCurrentPage(page);
+        };
+
+    const [congestionNote, setCongestionNote] = useState(null);
+    const [numberOfStudents, setNumberOfStudents] = useState(1)
+    const [selectedDate, setSelectedDate] = useState(null);
+
+    const formatTimeAgo = (timestamp) => {
+        const now = new Date();
+        const past = new Date(timestamp);
+        const diff = Math.floor((now - past) / 1000); // in seconds
+
+        if (diff < 60) return `${diff} sec${diff !== 1 ? 's' : ''} ago`;
+        if (diff < 3600) return `${Math.floor(diff / 60)} min${Math.floor(diff / 60) !== 1 ? 's' : ''} ago`;
+        if (diff < 86400) return `${Math.floor(diff / 3600)} hour${Math.floor(diff / 3600) !== 1 ? 's' : ''} ago`;
+        if (diff < 604800) return `${Math.floor(diff / 86400)} day${Math.floor(diff / 86400) !== 1 ? 's' : ''} ago`;
+
+        // fallback: return exact date if older than 7 days
+        return past.toLocaleDateString("en-GB", {
+            day: "2-digit",
+            month: "short",
+            year: "numeric",
+        });
+    };
+    const handleCancel = () => {
+        showConfirm(
+            "Are you sure?",
+            "Your changes will not be saved!",
+            "Yes, leave"
+        ).then((result) => {
+            if (result.isConfirmed) {
+                navigate("/weekly-classes/find-a-class");
+            }
+        });
+    };
+    const relationOptions = [
+        { value: "Mother", label: "Mother" },
+        { value: "Father", label: "Father" },
+        { value: "Guardian", label: "Guardian" },
+    ];
+    const interestReasonOptions = [
+        { value: "To build my child's confidence", label: "To build my child's confidence" },
+        { value: "To improve their technical football skills", label: "To improve their technical football skills" },
+        { value: "Because my child loves football", label: "Because my child loves football" },
+        { value: "To help my child make friends and build social skills", label: "To help my child make friends and build social skills" },
+        { value: "To keep my child active and healthy", label: "To keep my child active and healthy" },
+        { value: "High-quality coaching in a fun, positive environment", label: "High-quality coaching in a fun, positive environment" },
+        { value: "Other", label: "Other" },
+
+    ];
+    const handleRemoveStudent = (indexToRemove) => {
+        setStudents((prevStudents) => {
+            const updatedStudents = prevStudents.filter((_, i) => i !== indexToRemove);
+
+            // ✅ IMPORTANT: sync input field
+            setNumberOfStudents(updatedStudents.length);
+
+            return updatedStudents;
+        });
+        setStudentRemoved(true);
+
+    };
+    const ClassOptions = [
+        { value: "4–7 years", label: "4–7 years" },
+        { value: "7–10 years", label: "7-10 years" },
+        { value: "10-12 years ", label: "10-12 years" },
+    ];
+
+    const hearOptions = [
+        { value: "Google", label: "Google" },
+        { value: "Facebook", label: "Facebook" },
+        { value: "Instagram", label: "Instagram" },
+        { value: "Friend", label: "Friend" },
+        { value: "Flyer", label: "Flyer" },
+    ];
+
+    function stripHtml(html) {
+        if (!html) return "";
+        const tempDiv = document.createElement("div");
+        tempDiv.innerHTML = html;
+        return tempDiv.textContent || tempDiv.innerText || "";
+    }
+
+    function htmlToHtmlArray(html) {
+        if (!html) return [];
+        const tempDiv = document.createElement("div");
+        tempDiv.innerHTML = html;
+
+        // 1. Try to find explicit list items and keep their inner HTML
+        const liItems = Array.from(tempDiv.querySelectorAll("li"))
+            .map(li => li.innerHTML.trim())
+            .filter(h => h !== "");
+        if (liItems.length > 0) return liItems;
+
+        // 2. Try to split by common block elements
+        const blockItems = Array.from(tempDiv.querySelectorAll("p, div"))
+            .map(p => p.innerHTML.trim())
+            .filter(h => h !== "");
+        if (blockItems.length > 0) return blockItems;
+
+        // 3. Fallback: split by newlines if it's just raw text
+        const plainText = tempDiv.innerHTML.trim();
+        if (plainText) {
+            return plainText.split(/\n+/).map(t => t.trim()).filter(t => t !== "");
+        }
+
+        return [];
+    }
+
+    // Extract trial key info items
+    const trialKeyInfo = Array.isArray(keyInfoData)
+        ? keyInfoData.find(item => item.serviceType === 'trial')?.keyInformationRaw
+        : keyInfoData?.keyInformationRaw;
+
+    const renderContent = (content) => {
+        return (
+            <div
+                className="text-gray-800 prose prose-blue max-w-none"
+                dangerouslySetInnerHTML={{ __html: content }}
+            />
+        );
+    };
+    const keyInfoArray = htmlToHtmlArray(trialKeyInfo);
+
+    // Map into dynamic options preserving HTML
+    const keyInfoOptions = keyInfoArray.map((item) => ({
+        value: item,
+        label: item,
+    }));
+
+    const [clickedIcon, setClickedIcon] = useState(null);
+    const [selectedRelation, setSelectedRelation] = useState(null);
+    const [selectedKeyInfo, setSelectedKeyInfo] = useState(null);
+    const [selectedHearOptions, setSelectedHearOptions] = useState(null);
+
+    const handleIconClick = (icon, plan = null) => {
+        setClickedIcon(icon);
+        setCongestionNote(null)
+        if (icon === 'currency') {
+            setSelectedPlans(plan || []); // default to empty array
+        }
+        else if (icon == 'group') {
+            setCongestionNote(plan)
+        }
+        else if (icon == 'p') {
+            setCongestionNote(plan)
+        }
+        else if (icon == 'calendar') {
+            setCongestionNote(plan)
+        }
+        setShowModal(true);
+    };
+
+
+    const { fetchPackages, packages } = usePayments()
+
+    const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+    const { venues, formData, setFormData, isEditVenue, setIsEditVenue, deleteVenue, fetchVenues } = useVenue() || {};
+    const [selectedUserIds, setSelectedUserIds] = useState([]);
+    const toggleCheckbox = (userId) => {
+        setSelectedUserIds((prev) =>
+            prev.includes(userId)
+                ? prev.filter((id) => id !== userId)
+                : [...prev, userId]
+        );
+    };
+    const isAllSelected = venues.length > 0 && selectedUserIds.length === venues.length;
+
+    const toggleSelectAll = () => {
+        if (isAllSelected) {
+            setSelectedUserIds([]);
+        } else {
+            const allIds = venues.map((user) => user.id);
+            setSelectedUserIds(allIds);
+        }
+    };
+
+    console.log('venues', venues)
+    const handleDelete = (id) => {
+        showConfirm(
+            'Are you sure?',
+            'This action will permanently delete the venue.',
+            'Yes, delete it!'
+        ).then((result) => {
+            if (result.isConfirmed) {
+                // console.log('DeleteId:', id);
+
+                deleteVenue(id); // Call your delete function here
+
+            }
+        });
+    };
+
+    const [openForm, setOpenForm] = useState(false);
+
+    const days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+    // useEffect(() => {
+    //     fetchVenues();
+    //     fetchPackages();
+    //     fetchTermGroup();
+    // }, [fetchVenues, fetchPackages, fetchTermGroup]);
+
+    const today = new Date();
+    const [currentDate, setCurrentDate] = useState(new Date());
+    const year = currentDate.getFullYear();
+    const hasInitialized = useRef(false); // ✅ Prevent re-running effect    const [fromDate, setFromDate] = useState(new Date(currentDate.getFullYear(), currentDate.getMonth(), 11));
+    const [toDate, setToDate] = useState(null);
+
+    const month = currentDate.getMonth();
+    const formatLocalDate = (date) => {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, "0"); // months are 0-indexed
+        const day = String(date.getDate()).padStart(2, "0");
+
+        return `${year}-${month}-${day}`; // e.g., "2025-08-10"
+    };
+
+    const getDaysArray = () => {
+        const startDay = new Date(year, month, 1).getDay();
+        const daysInMonth = new Date(year, month + 1, 0).getDate();
+        const days = [];
+
+        const offset = startDay === 0 ? 6 : startDay - 1;
+
+        for (let i = 0; i < offset; i++) days.push(null);
+        for (let i = 1; i <= daysInMonth; i++) {
+            days.push(new Date(year, month, i));
+        }
+
+        return days;
+    };
+
+
+    const calendarDays = getDaysArray();
+
+    const goToPreviousMonth = () => {
+        setCurrentDate(new Date(year, month - 1, 1));
+
+        setToDate(null);
+    };
+
+    const goToNextMonth = () => {
+        setCurrentDate(new Date(year, month + 1, 1));
+
+        setToDate(null);
+    };
+
+    const isSameDate = (d1, d2) => {
+        const date1 = typeof d1 === "string" ? new Date(d1) : d1;
+        const date2 = typeof d2 === "string" ? new Date(d2) : d2;
+
+        return (
+            date1 &&
+            date2 &&
+            date1.getDate() === date2.getDate() &&
+            date1.getMonth() === date2.getMonth() &&
+            date1.getFullYear() === date2.getFullYear()
+        );
+    };
+
+
+    const handleDateClick = (date) => {
+        const formattedDate = formatLocalDate(date); // safe from timezone issues
+
+        if (selectedDate === formattedDate) {
+            setSelectedDate(null);
+        } else {
+            setSelectedDate(formattedDate);
+        }
+    };
+
+
+
+    const modalRef = useRef(null);
+    const PRef = useRef(null);
+    useEffect(() => {
+        function handleClickOutside(event) {
+            const activeRef = clickedIcon === "group" ? modalRef : PRef;
+
+            if (
+                activeRef.current &&
+                !activeRef.current.contains(event.target)
+            ) {
+                setShowModal(false); // Close the modal
+            }
+        }
+
+        if (showModal) {
+            document.addEventListener("mousedown", handleClickOutside);
+        }
+
+        return () => {
+            document.removeEventListener("mousedown", handleClickOutside);
+        };
+    }, [showModal, clickedIcon, setShowModal]);
+
+    const [selectedClass, setSelectedClass] = useState();
+
+
+
+    const allTermRanges = Array.isArray(congestionNote)
+        ? congestionNote.flatMap(group =>
+            group.terms.map(term => ({
+                start: new Date(term.startDate),
+                end: new Date(term.endDate),
+                exclusions: (Array.isArray(term.exclusionDates)
+                    ? term.exclusionDates
+                    : JSON.parse(term.exclusionDates || '[]')
+                ).map(date => new Date(date)),
+            }))
+        )
+        : [];
+    // or `null`, `undefined`, or any fallback value
+
+    // Usage inside calendar cell:
+    const isInRange = (date) => {
+        return allTermRanges.some(({ start, end }) =>
+            date >= start && date <= end
+        );
+    };
+
+    const isExcluded = (date) => {
+        return allTermRanges.some(({ exclusions }) =>
+            exclusions.some(ex => ex.toDateString() === date?.toDateString())
+        );
+    };
+    const formatDateToDDMMYYYY = (dateStr) => {
+        if (!dateStr) return "";
+
+        // ✅ Already in DD/MM/YYYY → return as it is
+        if (dateStr.includes("/")) return dateStr;
+
+        // ✅ Handle YYYY-MM-DD only
+        if (dateStr.includes("-")) {
+            const parts = dateStr.split("-");
+
+            if (parts.length === 3) {
+                const [year, month, day] = parts;
+
+                if (year && month && day) {
+                    return `${day}/${month}/${year}`;
+                }
+            }
+        }
+
+        // ❌ Invalid format fallback
+        return "";
+    };
+    useEffect(() => {
+        if (TrialData) {
+            // console.log('stp1')
+            if (Array.isArray(TrialData.students) && TrialData.students.length > 0) {
+
+                const mappedStudents = TrialData.students.map((student, index) => ({
+                    ...student,
+                    dateOfBirth: formatDateToDDMMYYYY(student.dateOfBirth),
+
+                    // ✅ Inject default class if missing
+                    selectedClassId:
+                        student.selectedClassId || singleClassSchedulesOnly?.id || null,
+
+                    selectedClassData:
+                        student.selectedClassData || singleClassSchedulesOnly || null,
+                    initialClassId:
+                        student.selectedClassId || singleClassSchedulesOnly?.id || null,
+                }));
+                console.log('mappedStudents', mappedStudents)
+                setStudents(mappedStudents);
+                setNumberOfStudents(TrialData?.totalStudents);
+            }
+
+            // console.log('stp3')
+            if (Array.isArray(TrialData.parents) && TrialData.parents.length > 0) {
+                setParents(
+                    TrialData.parents.map((p, idx) => ({
+                        id: idx + 1,
+                        ...p,
+                    }))
+                );
+            }
+            if (Array.isArray(TrialData.emergency) && TrialData.emergency.length > 0) {
+                setEmergency({
+                    sameAsAbove: false,
+                    ...TrialData.emergency[0],
+                });
+            }
+        }
+    }, [TrialData]);
+
+    useEffect(() => {
+        if (!singleClassSchedulesOnly) return;
+
+        setStudents((prev) => {
+            const updated = prev.map((student) => ({
+                ...student,
+                selectedClassId: singleClassSchedulesOnly.id,
+                selectedClassData: singleClassSchedulesOnly,
+                initialClassId: singleClassSchedulesOnly.id,
+            }));
+
+            console.log("Reset + Updated Students:", updated);
+
+            return updated;
+        });
+    }, [singleClassSchedulesOnly]);
+    const [dob, setDob] = useState('');
+    const [age, setAge] = useState(null);
+    const [time, setTime] = useState('');
+    const [phone, setPhone] = useState('');
+    const [emergencyPhone, setEmergencyPhone] = useState('');
+    const [sameAsAbove, setSameAsAbove] = useState(false);
+
+    // 🔁 Calculate Age Automatically
+    const handleDOBChange = (index, value) => {
+        // Remove non-numeric characters
+        let cleaned = value.replace(/[^\d]/g, "");
+
+        // Format to DD/MM/YYYY
+        if (cleaned.length > 2 && cleaned.length <= 4) {
+            cleaned = `${cleaned.slice(0, 2)}/${cleaned.slice(2)}`;
+        } else if (cleaned.length > 4) {
+            cleaned = `${cleaned.slice(0, 2)}/${cleaned.slice(2, 4)}/${cleaned.slice(4, 8)}`;
+        }
+
+        const updatedStudents = [...students];
+        updatedStudents[index].dateOfBirth = cleaned;
+
+        // Calculate age only if full date entered
+        if (cleaned.length === 10) {
+            const [day, month, year] = cleaned.split("/").map(Number);
+
+            const date = new Date(year, month - 1, day);
+
+            // Validate proper date
+            const isValid =
+                date &&
+                date.getDate() === day &&
+                date.getMonth() === month - 1 &&
+                date.getFullYear() === year;
+
+            if (isValid) {
+                const today = new Date();
+                let ageNow = today.getFullYear() - year;
+                const m = today.getMonth() - (month - 1);
+
+                if (m < 0 || (m === 0 && today.getDate() < day)) {
+                    ageNow--;
+                }
+
+                // Apply your 3–100 age rule
+                if (ageNow >= 3 && ageNow <= 100) {
+                    updatedStudents[index].age = ageNow;
+                } else {
+                    updatedStudents[index].age = "";
+                }
+            } else {
+                updatedStudents[index].age = "";
+            }
+        } else {
+            updatedStudents[index].age = "";
+        }
+
+        setStudents(updatedStudents);
+    };
+
+
+    // 🔁 Sync Emergency Contact
+
+
+
+
+    const handleInputChange = (index, field, value) => {
+        const updatedStudents = [...students];
+        updatedStudents[index][field] = value;
+        setStudents(updatedStudents);
+    };
+    console.log('singleClassSchedulesOnlsssy', singleClassSchedulesOnly);
+    const classesWithCapacity = Array.isArray(singleClassSchedulesOnly?.venueClasses) ? singleClassSchedulesOnly?.venueClasses?.filter((cls) => {
+        return cls.capacity > 0;
+    }) : [];
+    const allClasses = Array.isArray(singleClassSchedulesOnly?.venueClasses)
+        ? singleClassSchedulesOnly.venueClasses
+        : [];
+
+
+    const handleStudentClassChange = (index, selectedOption) => {
+        setStudents((prev) => {
+            const updated = [...prev];
+
+            if (!selectedOption) {
+                updated[index] = {
+                    ...updated[index],
+                    selectedClassId: null,
+                    selectedClassData: null,
+                    error: null
+                };
+                return updated;
+            }
+
+            const selectedClass = allClasses.find(
+                (cls) => cls.id === selectedOption.value
+            );
+
+            // 🚨 Capacity 0 case
+            if (selectedClass?.capacity === 0 &&
+                selectedOption.value !== updated[index].initialClassId &&
+                selectedOption.value !== updated[index].selectedClassId) {
+
+                showConfirm(
+                    "Are you sure?",
+                    "This class has no capacity. Do you want to join the waiting list instead?",
+                    "Yes"
+                ).then((result) => {
+                    if (result.isConfirmed) {
+                        navigate("/weekly-classes/find-a-class/add-to-waiting-list", {
+                            state: {
+                                itemId: selectedClass.id,
+                                studentsData: prev,              // 👈 ALL students
+                                parentsData: parents,            // 👈 parents
+                                emergencyData: emergency,        // 👈 emergency
+                                selectedClassData: selectedClass,
+                                selectedStudentIndex: index,
+                                comesFrom: 'trials',
+                                mainBookingId: mainBookingId,
+                            }
+                        });
+                    }
+                });
+
+
+
+
+                return prev; // don't update selection
+            }
+
+            // ✅ Normal case
+            updated[index] = {
+                ...updated[index],
+                selectedClassId: selectedOption.value,
+                selectedClassData: selectedClass,
+                error: null
+            };
+
+            return updated;
+        });
+    };
+    const formatOptionLabel = (option) => (
+        <div className="flex justify-between">
+            <span>{option.label}</span>
+            {option.capacity === 0 && (
+                <span className="text-[#F04438] text-sm">(Capacity 0)</span>
+            )}
+        </div>
+    );
+    const handleNumberChange = (e) => {
+        const val = e.target.value === "" ? "" : Number(e.target.value);
+
+        if (val === "" || [1, 2, 3, 4].includes(val)) {
+            setNumberOfStudents(val);
+
+            setStudents((prevStudents) => {
+                if (val === "") return [];
+
+                if (val > prevStudents.length) {
+                    const newStudents = Array.from(
+                        { length: val - prevStudents.length },
+                        () => ({
+                            studentFirstName: "",
+                            studentLastName: "",
+                            gender: "",
+                            age: "",
+                            dateOfBirth: "",
+                            medicalInformation: "",
+                            selectedClassId: "",
+                            selectedClassData: null,
+                            initialClassId: null,
+                        })
+                    );
+                    return [...prevStudents, ...newStudents];
+
+                }
+
+                return prevStudents.slice(0, val);
+            });
+
+
+        }
+    };
+    const isEmpty =
+        comesFrom === "" || comesFrom === null || comesFrom === undefined;
+
+    const venueClassOptions = !isEmpty
+        ? allClasses?.map((cls) => ({ value: cls.id, label: cls.className }))
+        : classesWithCapacity?.map((cls) => ({ value: cls.id, label: `${cls.className} (${cls.level ?? cls.levelName ?? cls.classLevel ?? ''})`}));
+
+
+    console.log('singleClassSchedulesOnlyasasasa', singleClassSchedulesOnly)
+    // useEffect(() => {
+    //     console.log('setStudentsasasasasas', students)
+    //     setStudents((prevStudents) => {
+    //         const n = Number(numberOfStudents) || 0;
+
+    //         if (n > prevStudents.length) {
+    //             const newStudents = Array.from({ length: n - prevStudents.length }).map(() => ({
+    //                 studentFirstName: '',
+    //                 studentLastName: '',
+    //                 dateOfBirth: null,
+    //                 age: '',
+    //                 gender: '',
+    //                 medicalInformation: '',
+
+    //                 // ✅ IMPORTANT FIX
+    //                 selectedClassId: singleClassSchedulesOnly?.id || null,
+    //                 selectedClassData: singleClassSchedulesOnly || null,
+    //             }));
+    //             console.log('prevStudents', prevStudents, 'newStudents', newStudents)
+    //             return [...prevStudents, ...newStudents];
+    //         }
+
+    //         if (n < prevStudents.length) {
+    //             return prevStudents.slice(0, n);
+    //         }
+
+    //         return prevStudents;
+    //     });
+    // }, [numberOfStudents, singleClassSchedulesOnly]);
+
+    const [parents, setParents] = useState([
+        {
+            id: Date.now(),
+            parentFirstName: '',
+            parentLastName: '',
+            parentEmail: '',
+            parentPhoneNumber: '',
+            relationToChild: '',
+            interestReason: '',
+            interestReasonOther: '',
+            howDidYouHear: ''
+
+        }
+    ]);
+    const handleAddParent = () => {
+        setParents((prev) => [
+            ...prev,
+            {
+                id: Date.now(),
+                parentFirstName: '',
+                parentLastName: '',
+                parentEmail: '',
+                parentPhoneNumber: '',
+                relationToChild: '',
+                interestReason: '',
+                interestReasonOther: '',
+                howDidYouHear: ''
+            },
+        ]);
+    };
+
+    const handleRemoveParent = (id) => {
+        setParents((prev) => prev.filter((p) => p.id !== id));
+    };
+
+    const handleStudentChange = (index, field, value) => {
+        const updated = [...students];
+        updated[index][field] = value;
+
+        // Calculate age if dateOfBirth
+        if (field === "dateOfBirth") {
+            const birth = new Date(value);
+            const today = new Date();
+            updated[index].age = today.getFullYear() - birth.getFullYear();
+        }
+
+        setStudents(updated);
+    };
+
+    const token = localStorage.getItem("adminToken");
+
+
+
+    const handleParentChange = (index, field, value) => {
+        const updated = [...parents];
+        updated[index][field] = value;
+        setParents(updated);
+    };
+
+    const handleEmergencyChange = (studentIndex, field, value) => {
+        const updated = [...students];
+        updated[studentIndex].emergency[field] = value;
+        setStudents(updated);
+    };
+
+    const fetchComments = useCallback(async () => {
+        const token = localStorage.getItem("adminToken");
+        if (!token) return;
+
+        try {
+            const response = await fetch(`${API_BASE_URL}/api/admin/book/free-trials/comment/list`, {
+                method: "GET",
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                },
+            });
+
+            const resultRaw = await response.json();
+            const result = resultRaw.data || [];
+            setCommentsList(result);
+        } catch (error) {
+            console.error("Failed to fetch comments:", error);
+
+            showError("Error", error.message || error.error || "Failed to fetch comments. Please try again later.");
+        }
+    }, []);
+    const handleSubmitComment = (e) => {
+        e.preventDefault();
+
+        if (!comment.trim()) return;
+
+        const newComment = {
+            comment: comment,
+            createdAt: new Date().toISOString(),
+            bookedByAdmin: {
+                firstName: adminInfo?.firstName || "Admin",
+                lastName: adminInfo?.lastName || "",
+                profile: adminInfo?.profile || "/members/dummyuser.png"
+            }
+        };
+
+        setTempComments((prev) => [newComment, ...prev]);
+
+        setComment('');
+    };
+
+    const handleSameAsAbove = (studentIndex) => {
+        const updated = [...students];
+        const primaryParent = updated[studentIndex].parents[0];
+        if (primaryParent) {
+            updated[studentIndex].emergency = {
+                parentFirstName: primaryParent.parentFirstName,
+                parentLastName: primaryParent.parentLastName,
+                parentPhoneNumber: primaryParent.parentPhoneNumber,
+                relationToChild: primaryParent.relationToChild?.label || "",
+                interestReason: primaryParent.interestReason || "",
+                interestReasonOther: primaryParent.interestReasonOther || "",
+                sameAsAbove: true
+            };
+        }
+        setStudents(updated);
+    };
+    const handlePhoneChange = (index, value) => {
+        const updated = [...parents];
+        updated[index].phone = value;
+        setParents(updated);
+    };
+    const [emergency, setEmergency] = useState({
+        sameAsAbove: false,
+        emergencyFirstName: "",
+        emergencyLastName: "",
+        emergencyPhoneNumber: "",
+        emergencyRelation: "",
+    });
+    useEffect(() => {
+        if (emergency.sameAsAbove && parents.length > 0) {
+            const firstParent = parents[0];
+            setEmergency(prev => ({
+                ...prev,
+                emergencyFirstName: firstParent.parentFirstName || "",
+                emergencyLastName: firstParent.parentLastName || "",
+                emergencyPhoneNumber: firstParent.parentPhoneNumber || "",
+                emergencyRelation: firstParent.relationToChild || "", // or whatever default you want
+            }));
+        }
+    }, [emergency.sameAsAbove, parents]);
+
+
+    const toDateOnly = (date) => {
+        if (!date) return null;
+
+        // If already in YYYY-MM-DD (backend case)
+        if (typeof date === "string" && date.includes("-")) {
+            return date;
+        }
+
+        // Handle DD/MM/YYYY
+        if (typeof date === "string" && date.includes("/")) {
+            const [day, month, year] = date.split("/");
+
+            if (!day || !month || !year) return null;
+
+            return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
+        }
+
+        // Fallback (Date object case)
+        const d = new Date(date);
+        if (isNaN(d)) return null;
+
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, "0");
+        const day = String(d.getDate()).padStart(2, "0");
+
+        return `${year}-${month}-${day}`;
+    };
+    const firstStudentId =
+        students[0]?.id || TrialData?.students?.[0]?.id || null;
+
+    const handleAfterBooking = async (result) => {
+        const types = {
+            commentType: "free",
+            serviceType: "weekly class"
+        };
+
+        try {
+            if (tempComments.length > 0 && result?.data?.parentAdminId) {
+                await submitAllComments(tempComments, result.data.parentAdminId, types);
+                setTempComments([]);
+            }
+        } catch (err) {
+            console.error("Comment submit failed:", err);
+        }
+    };
+
+    const handleSubmit = async () => {
+        const sErrors = [];
+        const pErrors = [];
+        const eErrors = {};
+        const tErrors = {};
+        let firstErrorField = null;
+
+        const scrollToError = (id) => {
+            const el = document.getElementById(id);
+            if (el) {
+                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                el.focus?.();
+            }
+        };
+
+        // Trial Date Validation
+        if (!selectedDate) {
+            tErrors.selectedDate = "Please select a trial date";
+            if (!firstErrorField) firstErrorField = "trial-date-calendar";
+        }
+
+        // Students Validation
+        students.forEach((s, idx) => {
+            const err = {};
+            if (!s.studentFirstName?.trim()) {
+                err.studentFirstName = "First name is required";
+                if (!firstErrorField) firstErrorField = `student-${idx}-studentFirstName`;
+            }
+            if (!s.studentLastName?.trim()) {
+                err.studentLastName = "Last name is required";
+                if (!firstErrorField) firstErrorField = `student-${idx}-studentLastName`;
+            }
+            if (!s.dateOfBirth) {
+                err.dateOfBirth = "Date of birth is required";
+                if (!firstErrorField) firstErrorField = `student-${idx}-dateOfBirth`;
+            }
+            if (!s.gender) {
+                err.gender = "Gender is required";
+                if (!firstErrorField) firstErrorField = `student-${idx}-gender`;
+            }
+            if (!s.selectedClassId && !singleClassSchedulesOnly?.id) {
+                err.selectedClassId = "Class is required";
+                if (!firstErrorField) firstErrorField = `student-${idx}-selectedClassId`;
+            }
+            if (!s.medicalInformation?.trim()) {
+                err.medicalInformation = "Medical information is required";
+                if (!firstErrorField) firstErrorField = `student-${idx}-medicalInformation`;
+            }
+            sErrors[idx] = err;
+        });
+
+        // Parents Validation
+        parents.forEach((p, idx) => {
+            const err = {};
+            if (!p.parentFirstName?.trim()) {
+                err.parentFirstName = "First name is required";
+                if (!firstErrorField) firstErrorField = `parent-${idx}-parentFirstName`;
+            }
+            if (!p.parentLastName?.trim()) {
+                err.parentLastName = "Last name is required";
+                if (!firstErrorField) firstErrorField = `parent-${idx}-parentLastName`;
+            }
+            if (!p.parentEmail?.trim()) {
+                err.parentEmail = "Email is required";
+                if (!firstErrorField) firstErrorField = `parent-${idx}-parentEmail`;
+            } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(p.parentEmail)) {
+                err.parentEmail = "Invalid email format";
+                if (!firstErrorField) firstErrorField = `parent-${idx}-parentEmail`;
+            }
+            if (!p.parentPhoneNumber?.trim()) {
+                err.parentPhoneNumber = "Phone number is required";
+                if (!firstErrorField) firstErrorField = `parent-${idx}-parentPhoneNumber`;
+            }
+            if (!p.relationToChild) {
+                err.relationToChild = "Relation is required";
+                if (!firstErrorField) firstErrorField = `parent-${idx}-relationToChild`;
+            }
+            if (!p.interestReason) {
+                err.interestReason = "Interest reason is required";
+                if (!firstErrorField) firstErrorField = `parent-${idx}-interestReason`;
+            }
+            if (!p.howDidYouHear) {
+                err.howDidYouHear = "Source is required";
+                if (!firstErrorField) firstErrorField = `parent-${idx}-howDidYouHear`;
+            }
+            pErrors[idx] = err;
+        });
+
+        // Emergency Validation (Optional)
+        setStudentErrors(sErrors);
+        setParentErrors(pErrors);
+        setEmergencyErrors(eErrors);
+        setTrialErrors(tErrors);
+
+        if (firstErrorField) {
+            scrollToError(firstErrorField);
+            return;
+        }
+
+        setIsSubmitting(true);
+
+        const formattedStudents = students.map((s) => {
+            const { studentStatus, selectedClassData, ...rest } = s;
+
+            return {
+                ...rest,
+                dateOfBirth: toDateOnly(s.dateOfBirth),
+                classScheduleId:
+                    s.selectedClassData?.id || singleClassSchedulesOnly?.id,
+            };
+        });
+
+        const formattedParents = parents.map(({ id, ...rest }) =>
+            studentRemoved ? rest : { id, ...rest }
+        );
+
+        const formattedEmergency = studentRemoved
+            ? (({ id, ...rest }) => rest)(emergency)
+            : emergency;
+
+        // ✅ Main payload
+        const payload = {
+            keyInformation: selectedKeyInfo,
+            venueId: selectedVenue?.id,
+            trialDate: selectedDate,
+            totalStudents: students.length,
+            students: formattedStudents,
+            parents: formattedParents,
+            emergency: formattedEmergency,
+        };
+
+        // ✅ Waiting list payload
+        const payloadwaitinglist = {
+            bookingId: TrialData?.bookingId || null,
+            keyInformation: selectedKeyInfo,
+            venueId: selectedVenue?.id,
+            trialDate: selectedDate,
+            totalStudents: students.length,
+            students: formattedStudents,
+            parents: formattedParents,
+            emergency: formattedEmergency,
+        };
+
+
+
+        try {
+            let res;
+
+            if (from_lead) {
+                res = await createBookFreeTrials(payload, leadId); // assume it's a promise
+            }
+            else if (comesFrom === "waitingList") {
+                res = await createReBookFreeTrials(payloadwaitinglist, TrialData.id);
+            }
+            else if (useofRebook == "useofRebook") {
+                res = await createReBookFreeTrials(payload, TrialData.id);
+            }
+            else {
+                res = await createBookFreeTrials(payload); // assume it's a promise
+
+            }
+            setIsBooked(true);
+            await handleAfterBooking(res);
+            navigate(`/weekly-classes/trial/list`)
+            // Optionally show success alert or reset form
+        } catch (error) {
+            console.error("Error while submitting:", error);
+            // Optionally show error alert
+        } finally {
+            setIsSubmitting(false); // Stop loading
+            setStudentRemoved(false);
+
+        }
+    };
+
+    useEffect(() => {
+        if (!finalClassId) {
+            navigate("/weekly-classes/find-a-class", { replace: true });
+        }
+    }, [finalClassId, navigate]);
+    useEffect(() => {
+        const fetchData = async () => {
+            if (finalClassId) {
+                setIsBooked(false);
+
+                await fetchFindClassID(finalClassId);
+                await fetchKeyInfo();
+
+                if (existingparentid) {
+                    await fetchMembershipByParent(existingparentid);
+                }
+
+                if (useofRebook == 'useofRebook') {
+                    await fetchVenues();
+                }
+            }
+        };
+
+        fetchData();
+    }, [finalClassId, existingparentid, fetchFindClassID]);
+
+    const handleClick = (val) => {
+        if (val === 'AC') {
+            setExpression('');
+            setResult('');
+        } else if (val === '⌫') {
+            setExpression((prev) => prev.slice(0, -1));
+        } else if (val === '=') {
+            try {
+                const replacedExpr = expression
+                    .replace(/×/g, '*')
+                    .replace(/÷/g, '/')
+                    .replace(/−/g, '-');
+                const evalResult = evaluate(replacedExpr);
+                setResult(evalResult.toLocaleString());
+            } catch {
+                setResult('Error');
+            }
+        } else if (val === '±') {
+            if (result) {
+                const toggled = parseFloat(result.replace(/,/g, '')) * -1;
+                setExpression(toggled.toString());
+                setResult(toggled.toLocaleString());
+            } else if (expression) {
+                // Match the last number in expression
+                const match = expression.match(/(-?\d+\.?\d*)$/);
+                if (match) {
+                    const number = match[0];
+                    const toggled = parseFloat(number) * -1;
+                    setExpression((prev) =>
+                        prev.replace(new RegExp(`${number}$`), toggled.toString())
+                    );
+                }
+            }
+        } else {
+            setExpression((prev) => prev + val);
+            setResult('');
+        }
+    };
+    const renderExpression = () => {
+        const tokens = expression.split(/([+\u2212×÷%])/g); // \u2212 is the unicode minus (−)
+        return tokens.map((token, i) => {
+            const isOperator = ['+', '−', '×', '÷', '%'].includes(token);
+            return (
+                <span key={i} className={isOperator ? 'text-[#F94D5C]' : ''}>
+                    {token || 0}
+                </span>
+            );
+        });
+    };
+
+    const buttons = [
+        ['AC', '±', '%', '÷',],
+        ["7", "8", "9", "×"],
+        ["4", "5", "6", "−"],
+        ["1", "2", "3", "+"],
+        ["", "0", ".", "="],
+
+    ];
+    const handleClickOutside = (e) => {
+        if (
+            (activePopup === 1 && popup1Ref.current && !popup1Ref.current.contains(e.target) && img1Ref.current && !img1Ref.current.contains(e.target)) ||
+            (activePopup === 2 && popup2Ref.current && !popup2Ref.current.contains(e.target) && img2Ref.current && !img2Ref.current.contains(e.target)) ||
+            (activePopup === 3 && popup3Ref.current && !popup3Ref.current.contains(e.target) && img3Ref.current && !img3Ref.current.contains(e.target))
+        ) {
+            togglePopup(null);
+        }
+    };
+
+    useEffect(() => {
+        document.addEventListener("mousedown", handleClickOutside);
+        return () => {
+            document.removeEventListener("mousedown", handleClickOutside);
+        };
+    }, [activePopup]);
+    useEffect(() => {
+        if (singleClassSchedulesOnly?.venue?.paymentGroups?.length > 0) {
+            const cleanedPlans = singleClassSchedulesOnly.venue?.paymentGroups[0]?.paymentPlans.map(plan => ({
+                id: plan.id,
+                title: plan.title,
+                price: plan.price,
+                interval: plan.interval,
+                students: plan.students,
+                duration: plan.duration,
+                joiningFee: plan.joiningFee,
+                holidayCampPackage: plan.HolidayCampPackage,
+                termsAndCondition: plan.termsAndCondition,
+            }));
+            // console.log('cleanedPlans', cleanedPlans);
+            setSelectedPlans(cleanedPlans);
+        } else {
+            // console.log('cleanedPlans not found');
+        }
+    }, [singleClassSchedulesOnly]); // ✅ now it runs when data is fetched
+    // console.log('singleClassSchedulesOnly?.venue?', singleClassSchedulesOnly)
+
+    const genderOptions = [
+        { value: "male", label: "Male" },
+        { value: "female", label: "Female" },
+        { value: "other", label: "Other" },
+    ];
+    const sessionDates = singleClassSchedulesOnly?.venue?.termGroups?.flatMap(group =>
+        group.terms.flatMap(term =>
+            term.sessionsMap.map(s => s.sessionDate)
+        )
+    ) || [];
+
+    const selectedLabel =
+        keyInfoOptions.find((opt) => opt.value === selectedKeyInfo)?.label ||
+        "Key Information";
+    const sessionDatesSet = new Set(sessionDates);
+    useEffect(() => {
+        if (hasInitialized.current || !sessionDatesSet || sessionDatesSet.size === 0) return;
+
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        const allDates = Array.from(sessionDatesSet)
+            .map(dateStr => new Date(dateStr))
+            .filter(d => {
+                const date = new Date(d);
+                date.setHours(0, 0, 0, 0);
+                return date >= today; // ✅ Sirf future dates
+            })
+            .sort((a, b) => a - b);
+
+        if (allDates.length === 0) return; // koi future date nahi
+
+        const earliestDate = allDates[0];
+
+        setCurrentDate(
+            new Date(
+                earliestDate.getFullYear(),
+                earliestDate.getMonth(),
+                1
+            )
+        );
+
+        hasInitialized.current = true;
+    }, [sessionDatesSet]);
+
+    const handleSubmitClick = (e) => {
+        handleSubmit();
+    };
+    useEffect(() => {
+        if (singleClassSchedulesOnly?.venue) {
+            setSelectedVenue(singleClassSchedulesOnly.venue);
+        }
+    }, [singleClassSchedulesOnly]);
+    useEffect(() => {
+        if (parentData?.id) {
+            setParents([
+                {
+                    id: parentData.id,
+                    parentFirstName: parentData.parentFirstName || "",
+                    parentLastName: parentData.parentLastName || "",
+                    parentEmail: parentData.parentEmail || "",
+                    parentPhoneNumber: parentData.parentPhoneNumber || "",
+                    relationToChild: "",
+                    interestReason: parentData.interestReason || "",
+                    interestReasonOther: parentData.interestReasonOther || "",
+                    howDidYouHear: "",
+                },
+            ]);
+
+            setIsPrefilled(true);
+        }
+    }, [parentData]);
+    if (loading) {
+        return (
+            <>
+                <Loader />
+            </>
+        )
+    }
+
+    return (
+        <div className="pt-1 bg-gray-50 min-h-screen">
+            <div className={`flex pe-4 justify-between items-center mb-4 ${openForm ? 'md:w-3/4' : 'w-full'}`}>
+
+                <h2 onClick={() => {
+                    if (from_lead === "leadDatabase") {
+                        navigate("/weekly-classes/central-leads");
+                    } else if (from_lead === "yes") {
+                        navigate("/weekly-classes/central-leads");
+                    }
+                    else {
+                        navigate("/weekly-classes/find-a-class");
+                    }
+                }}
+                    className="text-xl md:text-2xl font-semibold flex items-center gap-2 md:gap-3 cursor-pointer hover:opacity-80 transition-opacity duration-200"
+                >
+                    <img
+                        src="/images/icons/arrow-left.png"
+                        alt="Back"
+                        className="w-5 h-5 md:w-6 md:h-6"
+                    />
+                    <span className="truncate">
+                        Book a FREE Trial
+                    </span>
+                </h2>
+                <div className="flex gap-3 relative items-center">
+                    <img
+                        ref={img1Ref}
+
+                        src="/members/booktrial1.png"
+                        className={` rounded-full  hover:bg-[#0DD180] transition cursor-pointer ${activePopup === 1 ? 'bg-[#0DD180]' : 'bg-gray-700'} `}
+                        onClick={() => togglePopup(1)}
+                    />
+                    {activePopup === 1 && (
+                        <div ref={popup1Ref} className="  absolute min-w-[850px] bg-opacity-30 flex right-2 items-center top-15 justify-center z-50">
+                            <div className="flex items-center justify-center w-full px-2 py-6 sm:px-2 md:py-2">
+                                <div className="bg-white rounded-3xl p-4 sm:p-6 w-full max-w-4xl shadow-2xl">
+                                    {/* Header */}
+                                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-[#E2E1E5] pb-4 mb-4 gap-2">
+                                        <h2 className="font-semibold text-[20px] sm:text-[24px]">Payment Plan Preview</h2>
+                                        <button className="text-gray-400 hover:text-black text-xl font-bold">
+                                            <img src="/images/icons/cross.png" onClick={() => togglePopup(null)} alt="close" className="w-5 h-5" />
+                                        </button>
+                                    </div>
+                                    <PlanTabs selectedPlans={selectedPlans} />
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                    <img
+                        ref={img2Ref}
+                        onClick={() => togglePopup(2)}
+                        src="/members/booktrial2.png"
+                        className={` rounded-full  hover:bg-[#0DD180] transition cursor-pointer ${activePopup === 2 ? 'bg-[#0DD180]' : 'bg-gray-700'} `}
+                        alt=""
+                    />
+                    {activePopup === 2 && (
+                        <div ref={popup2Ref} className="absolute right-0 top-20 z-50 flex items-center justify-center min-w-[320px]">
+                            <div className="bg-[#464C55] rounded-2xl p-4 w-[468px] shadow-2xl text-white">
+                                {/* Display */}
+                                <div className="text-right min-h-[80px] mb-4">
+                                    <div className="text-[24px] text-gray-300 break-words">
+                                        {renderExpression()}
+
+                                    </div>
+                                    <div className="text-[56px] font-bold text-white leading-snug">
+                                        {result !== "" && result}
+                                    </div>
+                                </div>
+
+                                {/* Buttons */}
+                                <div className="grid grid-cols-4 gap-3">
+                                    {buttons.flat().map((btn, i) => {
+                                        const isOperator = ['÷', '±', '×', '−', '+', '%', '=', 'AC'].includes(btn);
+                                        const iconMap = {
+                                            '÷': '/calcIcons/divide.png',
+                                            '%': '/calcIcons/percentage.png',
+                                            '⌫': '/calcIcons/np.png',
+                                            '×': '/calcIcons/multiply.png',
+                                            '−': '/calcIcons/sub.png',
+                                            '+': '/calcIcons/add.png',
+                                            '=': '/calcIcons/equal.png',
+                                            '±': '/calcIcons/NP.png',
+                                        };
+
+                                        const showRed = ['+', '−', '×', '÷', '%'].includes(btn) && expression.includes(btn);
+
+                                        return (
+                                            <button
+                                                key={i}
+                                                onClick={() => btn && handleClick(btn)}
+                                                className={`
+                py-4 rounded-2xl text-[36px] font-semibold flex items-center justify-center h-16 transition-all duration-150
+                ${isOperator ? 'bg-[#81858B] text-white' : 'bg-white text-black hover:bg-gray-100'}
+                ${showRed ? 'text-[#F94D5C]' : ''}
+                ${btn === '' ? 'opacity-0 pointer-events-none' : ''}
+            `}
+                                            >
+                                                {iconMap[btn] ? (
+                                                    <img src={iconMap[btn]} alt={btn} className="w-5 h-5 object-contain" />
+                                                ) : (
+                                                    btn
+                                                )}
+                                            </button>
+                                        );
+                                    })}
+
+                                </div>
+
+                            </div>
+                        </div>
+
+                    )}
+
+
+
+
+                    <img
+                        ref={img3Ref}
+                        src="/members/booktrial3.png"
+                        alt=""
+                        onClick={() => togglePopup(3)}
+                        className={` rounded-full  hover:bg-[#0DD180] transition cursor-pointer ${activePopup === 3 ? 'bg-[#0DD180]' : 'bg-gray-700'} `}
+                    />
+                    {activePopup === 3 && (
+                        <div ref={popup3Ref} className="absolute top-full z-99 mt-8 right-0 w-100 p-4 bg-white rounded-2xl shadow-lg text-sm leading-relaxed text-gray-700">
+                            <div className="font-semibold mb-2 text-[18px]">Phone Script</div>
+                            <textarea
+                                readOnly
+                                className="w-full  min-h-[100px] max-w-[375px]  min-w-[375px]  resize text-[16px]  leading-relaxed bg-transparent focus:outline-none"
+                                defaultValue="In publishing and graphic design, Lorem ipsum is a placeholder text commonly used to demonstrate the visual form of a document or a typeface."
+                            />
+                        </div>
+
+                    )}
+
+                </div>
+            </div>
+            <div className="md:flex w-full gap-4">
+                <div className="md:min-w-[508px] md:max-w-[508px] text-base space-y-5">
+                    {/* Search */}
+                    <div className="space-y-3 bg-white p-6 rounded-3xl shadow-sm ">
+                        <h2 className="text-[24px] font-semibold">Enter Trial Information</h2>
+                        <div className="">
+                            <label htmlFor="" className="text-base font-semibold">Venue</label>
+                            <div className="relative mt-2">
+                                {useofRebook === "useofRebook" ? (
+                                    <select
+                                        value={selectedVenue?.id || ""}
+                                        onChange={(e) => {
+                                            const venue = venues.find(v => v.id === Number(e.target.value));
+
+                                            setSelectedVenue(venue);
+
+                                            // 👇 get classScheduleId from selected venue
+                                            if (venue?.classSchedules?.length > 0) {
+                                                setSelectedClassId(venue.classSchedules[0].id); // or based on your logic
+                                            }
+                                        }}
+                                        className="w-full border border-gray-300 rounded-xl px-3 text-[16px] py-3 pl-9 focus:outline-none"
+                                    >
+                                        <option value="">Select venue</option>
+
+                                        {venues.map((venue) => (
+                                            <option key={venue.id} value={venue.id}>
+                                                {venue.name} ({venue.area})
+                                            </option>
+                                        ))}
+                                    </select>
+                                ) : (
+                                    <input
+                                        type="text"
+                                        value={singleClassSchedulesOnly?.venue?.name || ""}
+                                        readOnly
+                                        placeholder="Select venue"
+                                        className="w-full border border-gray-300 rounded-xl px-3 text-[16px] py-3 pl-9 focus:outline-none"
+                                    />
+                                )}
+
+                                <FiSearch className="absolute left-3 top-4 text-[20px]" />
+                            </div>
+                        </div>
+                        <div className="mb-5">
+                            <label htmlFor="" className="text-base font-semibold">Number of students</label>
+                            <div className="relative mt-2 ">
+
+                                <input
+                                    type="number"
+                                    value={numberOfStudents}
+                                    onChange={handleNumberChange}
+                                    placeholder="Choose number of students"
+                                    className="w-full border border-gray-300 rounded-xl px-3 text-[16px] py-3 focus:outline-none"
+                                />
+
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className={`space-y-3 bg-white p-6 rounded-3xl shadow-sm border ${trialErrors.selectedDate ? 'border-[#F04438]' : 'border-transparent'}`} id="trial-date-calendar">
+                        <div className="">
+                            <h2 className="text-[24px] font-semibold">Select Trial Date</h2>
+                            {trialErrors.selectedDate && (
+                                <p className="text-[#F04438] text-sm mt-2">{trialErrors.selectedDate}</p>
+                            )}
+
+                            <div className="rounded p-4 mt-6 text-center text-base w-full max-w-md mx-auto">
+                                {/* Header */}
+                                <div className="flex justify-center gap-5 items-center mb-3">
+                                    <button
+                                        onClick={goToPreviousMonth}
+                                        className="w-8 h-8 rounded-full bg-white text-black hover:bg-black hover:text-white border border-black flex items-center justify-center"
+                                    >
+                                        <ChevronLeft className="w-5 h-5" />
+                                    </button>
+                                    <p className="font-semibold text-[20px]">
+                                        {currentDate.toLocaleString("default", { month: "long" })} {year}
+                                    </p>
+                                    <button
+                                        onClick={goToNextMonth}
+                                        className="w-8 h-8 rounded-full bg-white text-black hover:bg-black hover:text-white border border-black flex items-center justify-center"
+                                    >
+                                        <ChevronRight className="w-5 h-5" />
+                                    </button>
+                                </div>
+
+                                {/* Day Labels */}
+                                <div className="grid grid-cols-7 text-xs gap-1 text-[18px] text-gray-500 mb-1">
+                                    {["M", "T", "W", "T", "F", "S", "S"].map((day, indx) => (
+                                        <div key={indx} className="font-medium text-center">
+                                            {day}
+                                        </div>
+                                    ))}
+                                </div>
+
+                                {/* Calendar Weeks */}
+                                <div className="flex flex-col gap-1">
+                                    {Array.from({ length: Math.ceil(calendarDays.length / 7) }).map((_, weekIndex) => {
+                                        const week = calendarDays.slice(weekIndex * 7, weekIndex * 7 + 7);
+
+                                        return (
+                                            <div
+                                                key={weekIndex}
+                                                className="grid grid-cols-7 text-[18px] gap-1 py-1 rounded"
+                                            >
+                                                {week.map((date, i) => {
+                                                    if (!date) {
+                                                        return <div key={i} />;
+                                                    }
+
+                                                    const formattedDate = formatLocalDate(date);
+                                                    const isAvailable = sessionDatesSet.has(formattedDate); // check if this date is valid session
+                                                    const isSelected = isSameDate(date, selectedDate);
+                                                    const today = new Date();
+                                                    today.setHours(0, 0, 0, 0);
+
+                                                    const current = new Date(date);
+                                                    current.setHours(0, 0, 0, 0);
+                                                    const isPastAvailable = isAvailable && current < today;
+                                                    return (
+                                                        <div
+                                                            key={i}
+                                                            onClick={() => {
+                                                                if (isAvailable) {
+                                                                    handleDateClick(date);
+                                                                    if (trialErrors.selectedDate) {
+                                                                        setTrialErrors({ ...trialErrors, selectedDate: null });
+                                                                    }
+                                                                }
+                                                            }}
+                                                            className={`w-8 h-8 flex text-[18px] items-center justify-center mx-auto text-base rounded-full
+    ${isPastAvailable
+                                                                    ? "bg-red-200 text-red-700 cursor-not-allowed"
+                                                                    : isAvailable
+                                                                        ? "cursor-pointer bg-sky-200"
+                                                                        : "cursor-not-allowed opacity-40 bg-white"
+                                                                }
+    ${isSelected ? "selectedDate text-white font-bold" : ""}
+    ${trialErrors.selectedDate ? "ring-2 ring-[#F04438]" : ""}
+  `}
+                                                        >
+                                                            {date.getDate()}
+                                                        </div>
+
+                                                    );
+                                                })}
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+
+                <div className="flex-1 bg-white transition-all duration-300">
+                    <div className="max-w-full mx-auto bg-[#f9f9f9] px-6 ">
+
+                        <div className="space-y-10   ">
+                            {students.map((student, index) => (
+                                <motion.div
+                                    key={index}
+                                    initial={{ opacity: 0, y: 30 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    transition={{ duration: 0.4, delay: index * 0.1 }}
+                                    className="bg-white mb-10 p-6 rounded-3xl shadow-sm space-y-6 relative"
+                                >
+                                    {students.length > 1 && (
+                                        <button
+                                            onClick={() => handleRemoveStudent(index)}
+                                            className="absolute top-4 right-4 text-[#F04438] hover:text-red-700 text-xl"
+                                        >
+                                            ✕
+                                        </button>
+                                    )}
+                                    <h2 className="text-[20px] font-semibold">
+                                        Student {index > 0 ? `${index + 1} ` : ''}Information
+                                    </h2>
+
+                                    {/* Row 1 */}
+                                    <div className="flex gap-4">
+                                        <div className="w-1/2">
+                                            <label className="block text-[16px] font-semibold">First name</label>
+                                            <input
+                                                id={`student-${index}-studentFirstName`}
+                                                className={`w-full mt-2 border ${studentErrors[index]?.studentFirstName ? 'border-[#F04438]' : 'border-gray-300'} rounded-xl px-4 py-3 text-base`}
+                                                placeholder="Enter first name"
+                                                value={student.studentFirstName}
+                                                onChange={(e) => {
+                                                    handleInputChange(index, 'studentFirstName', e.target.value);
+                                                    if (studentErrors[index]?.studentFirstName) {
+                                                        const newErrs = [...studentErrors];
+                                                        newErrs[index].studentFirstName = null;
+                                                        setStudentErrors(newErrs);
+                                                    }
+                                                }}
+                                            />
+                                            {studentErrors[index]?.studentFirstName && (
+                                                <p className="text-[#F04438] text-sm mt-1">{studentErrors[index].studentFirstName}</p>
+                                            )}
+                                        </div>
+                                        <div className="w-1/2">
+                                            <label className="block text-[16px] font-semibold">Last name</label>
+                                            <input
+                                                id={`student-${index}-studentLastName`}
+                                                className={`w-full mt-2 border ${studentErrors[index]?.studentLastName ? 'border-[#F04438]' : 'border-gray-300'} rounded-xl px-4 py-3 text-base`}
+                                                placeholder="Enter last name"
+                                                value={student.studentLastName}
+                                                onChange={(e) => {
+                                                    handleInputChange(index, 'studentLastName', e.target.value);
+                                                    if (studentErrors[index]?.studentLastName) {
+                                                        const newErrs = [...studentErrors];
+                                                        newErrs[index].studentLastName = null;
+                                                        setStudentErrors(newErrs);
+                                                    }
+                                                }}
+                                            />
+                                            {studentErrors[index]?.studentLastName && (
+                                                <p className="text-[#F04438] text-sm mt-1">{studentErrors[index].studentLastName}</p>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {/* Row 2 */}
+                                    <div className="flex gap-4">
+                                        <div className="w-1/2">
+                                            <label className="block text-[16px] font-semibold">
+                                                Date of birth
+                                            </label>
+
+                                            <input
+                                                id={`student-${index}-dateOfBirth`}
+                                                type="text"
+                                                value={student.dateOfBirth || ""}
+                                                onChange={(e) => {
+                                                    handleDOBChange(index, e.target.value);
+                                                    if (studentErrors[index]?.dateOfBirth) {
+                                                        const newErrs = [...studentErrors];
+                                                        newErrs[index].dateOfBirth = null;
+                                                        setStudentErrors(newErrs);
+                                                    }
+                                                }}
+                                                placeholder="DD/MM/YYYY (e.g., 15/10/2026)"
+                                                className={`w-full mt-2 border ${studentErrors[index]?.dateOfBirth ? 'border-[#F04438]' : 'border-gray-300'} rounded-xl px-4 py-3 text-base`}
+                                                maxLength={10}
+                                            />
+                                            {studentErrors[index]?.dateOfBirth && (
+                                                <p className="text-[#F04438] text-sm mt-1">{studentErrors[index].dateOfBirth}</p>
+                                            )}
+                                        </div>
+
+                                        <div className="w-1/2">
+                                            <label className="block text-[16px] font-semibold">Age</label>
+                                            <input
+                                                type="text"
+                                                value={student.age || ""}
+                                                readOnly
+                                                className="w-full mt-2 border border-gray-300 rounded-xl px-4 py-3 text-base"
+                                                placeholder="Automatic entry"
+                                            />
+                                        </div>
+                                    </div>
+
+
+                                    {/* Row 3 */}
+                                    <div className="flex gap-4">
+                                        <div className="w-1/2" id={`student-${index}-gender`}>
+                                            <label className="block text-[16px] font-semibold">Gender</label>
+                                            <Select
+                                                className="w-full mt-2 text-base"
+                                                classNamePrefix="react-select"
+                                                placeholder="Select gender"
+                                                value={genderOptions.find((option) => option.value === student.gender) || null}
+                                                onChange={(selectedOption) => {
+                                                    handleInputChange(index, "gender", selectedOption ? selectedOption.value : "");
+                                                    if (studentErrors[index]?.gender) {
+                                                        const newErrs = [...studentErrors];
+                                                        newErrs[index].gender = null;
+                                                        setStudentErrors(newErrs);
+                                                    }
+                                                }}
+                                                options={genderOptions}
+                                                styles={{
+                                                    control: (base) => ({
+                                                        ...base,
+                                                        borderColor: studentErrors[index]?.gender ? '#EF4444' : base.borderColor,
+                                                        '&:hover': {
+                                                            borderColor: studentErrors[index]?.gender ? '#EF4444' : base.borderColor
+                                                        }
+                                                    })
+                                                }}
+                                            />
+                                            {studentErrors[index]?.gender && (
+                                                <p className="text-[#F04438] text-sm mt-1">{studentErrors[index].gender}</p>
+                                            )}
+                                        </div>
+                                        <div className="w-1/2">
+                                            <label className="block text-[16px] font-semibold">
+                                                Medical information
+                                            </label>
+                                            <input
+                                                id={`student-${index}-medicalInformation`}
+                                                type="text"
+                                                placeholder="Enter medical info"
+                                                value={student.medicalInformation || ""}
+                                                onChange={(e) => {
+                                                    handleInputChange(index, "medicalInformation", e.target.value);
+                                                    if (studentErrors[index]?.medicalInformation) {
+                                                        const newErrs = [...studentErrors];
+                                                        newErrs[index].medicalInformation = null;
+                                                        setStudentErrors(newErrs);
+                                                    }
+                                                }}
+                                                className={`mt-2 w-full px-4 py-3 border ${studentErrors[index]?.medicalInformation ? 'border-[#F04438]' : 'border-gray-300'} rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                                            />
+                                            {studentErrors[index]?.medicalInformation && (
+                                                <p className="text-[#F04438] text-sm mt-1">{studentErrors[index].medicalInformation}</p>
+                                            )}
+
+                                        </div>
+                                    </div>
+
+                                    {/* Row 4 */}
+
+                                    <div className="flex gap-4">
+                                        {/* CLASS */}
+                                        <div className="w-1/2" id={`student-${index}-selectedClassId`}>
+                                            <label className="block text-[16px] font-semibold">Class/Level</label>
+
+                                            <Select
+                                                className="w-full mt-2 text-base"
+                                                classNamePrefix="react-select"
+                                                isClearable
+                                                placeholder="Select class"
+                                                options={venueClassOptions}
+                                                formatOptionLabel={formatOptionLabel}
+                                                value={
+                                                    venueClassOptions.find(
+                                                        (opt) => opt.value === student.selectedClassId
+                                                    ) || null
+                                                }
+                                                onChange={(option) => {
+                                                    handleStudentClassChange(index, option);
+                                                    if (studentErrors[index]?.selectedClassId) {
+                                                        const newErrs = [...studentErrors];
+                                                        newErrs[index].selectedClassId = null;
+                                                        setStudentErrors(newErrs);
+                                                    }
+                                                }}
+                                                styles={{
+                                                    control: (base) => ({
+                                                        ...base,
+                                                        borderColor: studentErrors[index]?.selectedClassId ? '#EF4444' : base.borderColor,
+                                                        '&:hover': {
+                                                            borderColor: studentErrors[index]?.selectedClassId ? '#EF4444' : base.borderColor
+                                                        }
+                                                    })
+                                                }}
+                                            />
+                                            {studentErrors[index]?.selectedClassId && (
+                                                <p className="text-[#F04438] text-sm mt-1">
+                                                    {studentErrors[index].selectedClassId}
+                                                </p>
+                                            )}
+                                        </div>
+
+                                        {/* TIME */}
+                                        <div className="w-1/2">
+                                            <label className="block text-[16px] font-semibold">Time</label>
+
+                                            <input
+                                                type="text"
+                                                readOnly
+                                                value={
+                                                    student.selectedClassData
+                                                        ? `${student.selectedClassData.startTime} - ${student.selectedClassData.endTime}`
+                                                        : ""
+                                                }
+                                                className="w-full mt-2 border border-gray-300 rounded-xl px-4 py-3"
+                                                placeholder="Automatic entry"
+                                            />
+                                        </div>
+                                    </div>
+                                </motion.div>
+                            ))}
+                        </div>
+                        <div className="space-y-6 ">
+                            {parents.map((parent, index) => (
+                                <motion.div
+                                    key={parent.id}
+                                    initial={{ opacity: 0, y: 30 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    transition={{ duration: 0.3, delay: index * 0.1 }}
+                                    className={`bg-white mb-10 p-6 rounded-3xl shadow-sm space-y-6 relative ${students.length < 1 ? "" : "mt-10"
+                                        }`}                                >
+                                    {/* Top Header Row */}
+                                    <div className="flex justify-between  items-start">
+                                        <h2 className="text-[20px] font-semibold">
+                                            {index === 0
+                                                ? "Parent information"
+                                                : `Parent ${index + 1} information`}
+                                        </h2>
+                                        <div className="flex items-center gap-2">
+                                            {index === 0 && (
+                                                <button
+                                                    onClick={handleAddParent}
+                                                    disabled={parents.length >= 3}
+                                                    className="text-white text-[14px] px-4 py-2 bg-blue-600 rounded-xl hover:bg-blue-700 disabled:opacity-50"
+                                                >
+                                                    Add Parent
+                                                </button>
+                                            )}
+                                            {index > 0 && (
+                                                <button
+                                                    onClick={() => handleRemoveParent(parent.id)}
+                                                    className="text-gray-500 hover:text-[#B42318]"
+                                                >
+                                                    <X className="w-5 h-5" />
+                                                </button>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {/* Row 1 */}
+                                    <div className="flex gap-4">
+                                         <div className="w-1/2">
+                                             <label className="block text-[16px] font-semibold">First name</label>
+                                             <input
+                                                 id={`parent-${index}-parentFirstName`}
+                                                 className={`w-full mt-2 border ${parentErrors[index]?.parentFirstName ? 'border-[#F04438]' : 'border-gray-300'} rounded-xl px-4 py-3 text-base`}
+                                                 placeholder="Enter first name"
+                                                 disabled={isPrefilled} // Disable if pre-filled from existing parent data
+                                                 value={parent.parentFirstName}
+                                                 onChange={(e) => {
+                                                     // Remove numbers if typed or pasted
+                                                     const value = e.target.value.replace(/\d/g, "");
+                                                     handleParentChange(index, "parentFirstName", value);
+                                                     if (parentErrors[index]?.parentFirstName) {
+                                                         const newErrs = [...parentErrors];
+                                                         newErrs[index].parentFirstName = null;
+                                                         setParentErrors(newErrs);
+                                                     }
+                                                 }}
+                                                 onKeyPress={(e) => {
+                                                     if (/\d/.test(e.key)) e.preventDefault(); // block typing numbers
+                                                 }}
+                                             />
+                                             {parentErrors[index]?.parentFirstName && (
+                                                 <p className="text-[#F04438] text-sm mt-1">{parentErrors[index].parentFirstName}</p>
+                                             )}
+                                         </div>
+
+                                         <div className="w-1/2">
+                                             <label className="block text-[16px] font-semibold">Last name</label>
+                                             <input
+                                                 id={`parent-${index}-parentLastName`}
+                                                 className={`w-full mt-2 border ${parentErrors[index]?.parentLastName ? 'border-[#F04438]' : 'border-gray-300'} rounded-xl px-4 py-3 text-base`}
+                                                 placeholder="Enter last name"
+                                                 disabled={isPrefilled} // Disable if pre-filled from existing parent data
+                                                 value={parent.parentLastName}
+                                                 onChange={(e) => {
+                                                     // Remove numbers if typed or pasted
+                                                     const value = e.target.value.replace(/\d/g, "");
+                                                     handleParentChange(index, "parentLastName", value);
+                                                     if (parentErrors[index]?.parentLastName) {
+                                                         const newErrs = [...parentErrors];
+                                                         newErrs[index].parentLastName = null;
+                                                         setParentErrors(newErrs);
+                                                     }
+                                                 }}
+                                                 onKeyPress={(e) => {
+                                                     if (/\d/.test(e.key)) e.preventDefault(); // block typing numbers
+                                                 }}
+                                             />
+                                             {parentErrors[index]?.parentLastName && (
+                                                 <p className="text-[#F04438] text-sm mt-1">{parentErrors[index].parentLastName}</p>
+                                             )}
+                                         </div>
+                                     </div>
+
+
+                                    {/* Row 2 */}
+                                    <div className="flex gap-4">
+                                        <div className="w-1/2">
+                                            <label className="block text-[16px] font-semibold">Email</label>
+                                            <input
+                                                id={`parent-${index}-parentEmail`}
+                                                type="email"
+                                                className={`w-full mt-2 border ${parentErrors[index]?.parentEmail ? 'border-[#F04438]' : 'border-gray-300'} rounded-xl px-4 py-3 text-base`}
+                                                placeholder="Enter email address"
+                                                disabled={isPrefilled} // Disable if pre-filled from existing parent data
+                                                value={parent.parentEmail}
+
+                                                onChange={(e) => {
+                                                    handleParentChange(index, "parentEmail", e.target.value);
+                                                    if (parentErrors[index]?.parentEmail) {
+                                                        const newErrs = [...parentErrors];
+                                                        newErrs[index].parentEmail = null;
+                                                        setParentErrors(newErrs);
+                                                    }
+                                                }}
+                                            />
+                                            {parentErrors[index]?.parentEmail && (
+                                                <p className="text-[#F04438] text-sm mt-1">{parentErrors[index].parentEmail}</p>
+                                            )}
+                                        </div>
+                                        <div className="w-1/2" id={`parent-${index}-parentPhoneNumber`}>
+                                            <label className="block text-[16px] font-semibold">Phone number</label>
+                                            <PhoneNumberInput
+                                                value={parent.parentPhoneNumber}
+                                                onChange={(fullNumber) => {
+                                                    handleParentChange(index, "parentPhoneNumber", fullNumber);
+                                                    if (parentErrors[index]?.parentPhoneNumber) {
+                                                        const newErrs = [...parentErrors];
+                                                        newErrs[index].parentPhoneNumber = null;
+                                                        setParentErrors(newErrs);
+                                                    }
+                                                }}
+
+                                                placeholder="Enter phone number"
+                                                error={parentErrors[index]?.parentPhoneNumber}
+                                            />
+                                            {parentErrors[index]?.parentPhoneNumber && (
+                                                <p className="text-[#F04438] text-sm mt-1">{parentErrors[index].parentPhoneNumber}</p>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {/* Row 3 */}
+                                    <div className="flex flex-col gap-4">
+                                        {/* Interest Reason */}
+                                        <div className="w-full" id={`parent-${index}-interestReason`}>
+                                            <label className="block text-[16px] font-semibold">
+                                                What’s the main reason you’re interested in Samba Soccer Schools?
+                                            </label>
+
+                                            {parent.isCustomReason ? (
+                                                <div className="relative">
+                                                    <input
+                                                        type="text"
+                                                        placeholder="Please specify"
+                                                        value={parent.interestReason || ""}
+                                                        onChange={(e) => {
+                                                            handleParentChange(index, "interestReason", e.target.value);
+                                                            if (parentErrors[index]?.interestReason) {
+                                                                const newErrs = [...parentErrors];
+                                                                newErrs[index].interestReason = null;
+                                                                setParentErrors(newErrs);
+                                                            }
+                                                        }}
+                                                        className={`w-full mt-2 border ${parentErrors[index]?.interestReason ? 'border-[#F04438]' : 'border-gray-300'} rounded-xl px-4 py-3 pr-28 text-base`}
+                                                    />
+
+                                                    {/* Back Button */}
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            handleParentChange(index, "interestReason", "");
+                                                            handleParentChange(index, "isCustomReason", false);
+                                                        }}
+                                                        className="absolute right-3 top-3/5 -translate-y-1/2 text-sm text-blue-600 font-medium"
+                                                    >
+                                                        Select
+                                                    </button>
+                                                </div>
+                                            ) : (
+                                                <Select
+                                                    options={interestReasonOptions}
+                                                    placeholder="Select a reason"
+                                                    className="mt-2"
+                                                    classNamePrefix="react-select"
+                                                    value={interestReasonOptions.find(
+                                                        (o) => o.value === parent.interestReason
+                                                    )}
+                                                    onChange={(selected) => {
+                                                        if (selected.value === "Other") {
+                                                            handleParentChange(index, "interestReason", "");
+                                                            handleParentChange(index, "isCustomReason", true);
+                                                        } else {
+                                                            handleParentChange(index, "interestReason", selected.value);
+                                                            handleParentChange(index, "isCustomReason", false);
+                                                        }
+                                                        if (parentErrors[index]?.interestReason) {
+                                                            const newErrs = [...parentErrors];
+                                                            newErrs[index].interestReason = null;
+                                                            setParentErrors(newErrs);
+                                                        }
+                                                    }}
+                                                    styles={{
+                                                        control: (base) => ({
+                                                            ...base,
+                                                            borderColor: parentErrors[index]?.interestReason ? '#EF4444' : base.borderColor,
+                                                            '&:hover': {
+                                                                borderColor: parentErrors[index]?.interestReason ? '#EF4444' : base.borderColor
+                                                            }
+                                                        })
+                                                    }}
+                                                />
+                                            )}
+                                            {parentErrors[index]?.interestReason && (
+                                                <p className="text-[#F04438] text-sm mt-1">{parentErrors[index].interestReason}</p>
+                                            )}
+                                        </div>
+
+                                        {/* Tell Us Bit More */}
+                                        <div className="w-full">
+                                            <label className="block text-[16px] font-semibold">
+                                                Tell us a bit more (optional)
+                                            </label>
+
+                                            <input
+                                                type="text"
+                                                placeholder="Anything else you'd like to share?"
+                                                value={parent.interestReasonOther || ""}
+                                                onChange={(e) =>
+                                                    handleParentChange(index, "interestReasonOther", e.target.value)
+                                                }
+                                                className="w-full mt-2 border border-gray-300 rounded-xl px-4 py-3 text-base"
+                                            />
+                                        </div>
+                                    </div>
+                                    <div className="flex gap-4">
+                                        <div className="w-1/2" id={`parent-${index}-relationToChild`}>
+                                            <label className="block text-[16px] font-semibold">Relation to child</label>
+                                            <Select
+                                                options={relationOptions}
+                                                placeholder="Select Relation"
+                                                className="mt-2"
+                                                classNamePrefix="react-select"
+                                                //   isDisabled={isPrefilled}
+                                                value={relationOptions.find(
+                                                    (o) => o.value === parent.relationToChild
+                                                )}
+                                                onChange={(selected) => {
+                                                    handleParentChange(index, "relationToChild", selected.value);
+                                                    if (parentErrors[index]?.relationToChild) {
+                                                        const newErrs = [...parentErrors];
+                                                        newErrs[index].relationToChild = null;
+                                                        setParentErrors(newErrs);
+                                                    }
+                                                }}
+                                                styles={{
+                                                    control: (base) => ({
+                                                        ...base,
+                                                        borderColor: parentErrors[index]?.relationToChild ? '#EF4444' : base.borderColor,
+                                                        '&:hover': {
+                                                            borderColor: parentErrors[index]?.relationToChild ? '#EF4444' : base.borderColor
+                                                        }
+                                                    })
+                                                }}
+                                            />
+                                            {parentErrors[index]?.relationToChild && (
+                                                <p className="text-[#F04438] text-sm mt-1">{parentErrors[index].relationToChild}</p>
+                                            )}
+                                        </div>
+                                        <div className="w-1/2" id={`parent-${index}-howDidYouHear`}>
+                                            <label className="block text-[16px] font-semibold">How did you hear about us?</label>
+                                            <Select
+                                                options={hearOptions}
+                                                placeholder="Select from drop down"
+                                                className="mt-2"
+                                                // isDisabled={isPrefilled}
+                                                classNamePrefix="react-select"
+                                                value={hearOptions.find((o) => o.value === parent.howDidYouHear)}
+                                                onChange={(selected) => {
+                                                    handleParentChange(index, "howDidYouHear", selected.value);
+                                                    if (parentErrors[index]?.howDidYouHear) {
+                                                        const newErrs = [...parentErrors];
+                                                        newErrs[index].howDidYouHear = null;
+                                                        setParentErrors(newErrs);
+                                                    }
+                                                }}
+                                                styles={{
+                                                    control: (base) => ({
+                                                        ...base,
+                                                        borderColor: parentErrors[index]?.howDidYouHear ? '#EF4444' : base.borderColor,
+                                                        '&:hover': {
+                                                            borderColor: parentErrors[index]?.howDidYouHear ? '#EF4444' : base.borderColor
+                                                        }
+                                                    })
+                                                }}
+                                            />
+                                            {parentErrors[index]?.howDidYouHear && (
+                                                <p className="text-[#F04438] text-sm mt-1">{parentErrors[index].howDidYouHear}</p>
+                                            )}
+                                        </div>
+                                    </div>
+                                </motion.div>
+                            ))}
+                        </div>
+                        <div className="bg-white p-6 rounded-3xl shadow-sm space-y-6">
+                            <h2 className="text-[20px] font-semibold">Emergency contact details</h2>
+
+                            <div className="flex items-center gap-2">
+                                <input
+                                    type="checkbox"
+                                    checked={emergency.sameAsAbove}
+                                    onChange={() =>
+                                        setEmergency(prev => ({
+                                            ...prev,
+                                            sameAsAbove: !prev.sameAsAbove
+                                        }))
+                                    }
+                                />
+                                <label className="text-base font-semibold text-gray-700">
+                                    Fill same as above
+                                </label>
+                            </div>
+
+                            <div className="flex gap-4">
+                                <div className="w-1/2">
+                                    <label className="block text-[16px] font-semibold">First name (optional)</label>
+                                    <input
+                                        id="emergencyFirstName"
+                                        className={`w-full mt-2 border ${emergencyErrors.emergencyFirstName ? 'border-[#F04438]' : 'border-gray-300'} rounded-xl px-4 py-3 text-base`}
+                                        placeholder="Enter first name"
+                                        value={emergency.emergencyFirstName}
+                                        onChange={e => {
+                                            setEmergency(prev => ({
+                                                ...prev,
+                                                emergencyFirstName: e.target.value
+                                            }));
+                                            if (emergencyErrors.emergencyFirstName) {
+                                                setEmergencyErrors({ ...emergencyErrors, emergencyFirstName: null });
+                                            }
+                                        }}
+                                    />
+                                    {emergencyErrors.emergencyFirstName && (
+                                        <p className="text-[#F04438] text-sm mt-1">{emergencyErrors.emergencyFirstName}</p>
+                                    )}
+                                </div>
+                                <div className="w-1/2">
+                                    <label className="block text-[16px] font-semibold">Last name (optional)</label>
+                                    <input
+                                        id="emergencyLastName"
+                                        className={`w-full mt-2 border ${emergencyErrors.emergencyLastName ? 'border-[#F04438]' : 'border-gray-300'} rounded-xl px-4 py-3 text-base`}
+                                        placeholder="Enter last name"
+                                        value={emergency.emergencyLastName}
+                                        onChange={e => {
+                                            setEmergency(prev => ({
+                                                ...prev,
+                                                emergencyLastName: e.target.value
+                                            }));
+                                            if (emergencyErrors.emergencyLastName) {
+                                                setEmergencyErrors({ ...emergencyErrors, emergencyLastName: null });
+                                            }
+                                        }}
+                                    />
+                                    {emergencyErrors.emergencyLastName && (
+                                        <p className="text-[#F04438] text-sm mt-1">{emergencyErrors.emergencyLastName}</p>
+                                    )}
+                                </div>
+                            </div>
+
+                            <div className="flex gap-4">
+                                <div className="w-1/2" id="emergencyPhoneNumber">
+                                    <label className="block text-[16px] font-semibold">Phone number (optional)</label>
+
+                                    <PhoneNumberInput
+                                        value={emergency.emergencyPhoneNumber}
+                                        onChange={(fullNumber) => {
+                                            setEmergency(prev => ({ ...prev, emergencyPhoneNumber: fullNumber }));
+                                            if (emergencyErrors.emergencyPhoneNumber) {
+                                                setEmergencyErrors({ ...emergencyErrors, emergencyPhoneNumber: null });
+                                            }
+                                        }}
+
+                                        placeholder="Enter phone number"
+                                        error={emergencyErrors.emergencyPhoneNumber}
+                                    />
+                                    {emergencyErrors.emergencyPhoneNumber && (
+                                        <p className="text-[#F04438] text-sm mt-1">{emergencyErrors.emergencyPhoneNumber}</p>
+                                    )}
+                                </div>
+                                <div className="w-1/2" id="emergencyRelation">
+                                    <label className="block text-[16px] font-semibold">Relation to child (optional)</label>
+                                    <Select
+                                        options={relationOptions}
+                                        value={relationOptions.find(option => option.value === emergency.emergencyRelation)}
+                                        onChange={selectedOption => {
+                                            setEmergency(prev => ({
+                                                ...prev,
+                                                emergencyRelation: selectedOption?.value || ""
+                                            }));
+                                            if (emergencyErrors.emergencyRelation) {
+                                                setEmergencyErrors({ ...emergencyErrors, emergencyRelation: null });
+                                            }
+                                        }}
+                                        placeholder="Select Relation"
+                                        className="mt-2"
+                                        classNamePrefix="react-select"
+                                        styles={{
+                                            control: (base) => ({
+                                                ...base,
+                                                borderColor: emergencyErrors.emergencyRelation ? '#EF4444' : base.borderColor,
+                                                '&:hover': {
+                                                    borderColor: emergencyErrors.emergencyRelation ? '#EF4444' : base.borderColor
+                                                }
+                                            })
+                                        }}
+                                    />
+                                    {emergencyErrors.emergencyRelation && (
+                                        <p className="text-[#F04438] text-sm mt-1">{emergencyErrors.emergencyRelation}</p>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Premium Key Information Accordion */}
+                        <motion.div
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            className="w-full my-10 bg-white border border-blue-100 rounded-[2rem] shadow-[0_10px_40px_-15px_rgba(0,0,0,0.05)] overflow-hidden"
+                        >
+                            {/* Accordion Header */}
+                            <button
+                                onClick={() => setIsOpen(!isOpen)}
+                                className="w-full flex items-center justify-between p-8 hover:bg-blue-50/30 transition-colors duration-300 relative overflow-hidden group"
+                            >
+                                {/* Decorative background element */}
+                                <div className="absolute top-0 right-0 w-32 h-32 bg-blue-50 rounded-full -mr-16 -mt-16 opacity-50 group-hover:scale-110 transition-transform duration-500" />
+
+                                <div className="flex items-center gap-3 relative text-left">
+                                    <div className="p-2 bg-blue-600 rounded-lg shadow-lg shadow-blue-200">
+                                        <Info className="w-6 h-6 text-white" />
+                                    </div>
+                                    <h2 className="text-[24px] font-bold text-gray-900 leading-tight">Key Information</h2>
+                                </div>
+
+                                <div className="relative">
+                                    <motion.div
+                                        animate={{ rotate: isOpen ? 180 : 0 }}
+                                        transition={{ duration: 0.3 }}
+                                    >
+                                        <ChevronDown className="w-6 h-6 text-gray-400 group-hover:text-blue-600 transition-colors" />
+                                    </motion.div>
+                                </div>
+                            </button>
+
+                            {/* Accordion Content */}
+                            <AnimatePresence>
+                                {isOpen && (
+                                    <motion.div
+                                        initial={{ height: 0, opacity: 0 }}
+                                        animate={{ height: "auto", opacity: 1 }}
+                                        exit={{ height: 0, opacity: 0 }}
+                                        transition={{ duration: 0.4, ease: "easeInOut" }}
+                                    >
+                                        <div className="p-8 pt-0 relative border-t border-gray-50">
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 relative pt-6">
+                                                {trialKeyInfo ? (
+                                                    renderContent(JSON.parse(trialKeyInfo))
+                                                ) : (
+                                                    <div className="text-gray-500 italic py-4 col-span-2 text-center bg-gray-50 rounded-2xl border border-dashed border-gray-200">
+                                                        No key information available for this service.
+                                                    </div>
+                                                )}
+
+                                            </div>
+                                        </div>
+                                    </motion.div>
+                                )}
+                            </AnimatePresence>
+                        </motion.div>
+
+
+                        <Comments
+                            adminInfo={adminInfo}
+                            comment={comment}
+                            setComment={setComment}
+                            handleSubmitComment={handleSubmitComment}
+                            loadingComment={loadingComment}
+                            commentsList={commentsList}
+                            currentComments={[...tempComments, ...(currentComments || [])]}
+                            formatTimeAgo={formatTimeAgo}
+                        />
+                        <div className="flex justify-end  pb-10 gap-4">
+                            <button
+                                onClick={handleCancel}
+                                type="button"
+                                className="flex items-center justify-center gap-1 border border-[#717073] text-[#717073] px-12 text-[18px]  py-2 rounded-lg font-semibold bg-none"
+                            >
+                                Cancel
+                            </button>
+
+                            <button
+                                type="submit"
+                                onClick={handleSubmitClick}
+                                disabled={isSubmitting || selectedDate == null || isBooked}
+                                className={`
+        ${isBooked
+                                        ? "bg-[#027A48] border-[#027A48] cursor-default"
+                                        : isSubmitting || selectedDate == null
+                                            ? "bg-gray-400 border-gray-400 cursor-not-allowed"
+                                            : "bg-[#237FEA] border-[#237FEA] hover:bg-[#1f6dc9] cursor-pointer"
+                                    }
+        text-white text-[18px] font-semibold border px-6 py-3 rounded-lg transition
+    `}
+                            >
+                                {isBooked
+                                    ? "Booked"
+                                    : isSubmitting
+                                        ? "Submitting..."
+                                        : "Book FREE Trial"}
+                            </button>
+
+                        </div>
+
+
+                    </div>
+                </div>
+
+            </div>
+
+        </div>
+    );
+};
+
+export default List;

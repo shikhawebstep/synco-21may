@@ -1,0 +1,1196 @@
+import Select from "react-select";
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Trash2, Eye, Check, ChevronDown, ChevronUp, Search, Pencil } from 'lucide-react';
+import { motion, AnimatePresence } from "framer-motion";
+import { useSearchParams } from "react-router-dom";
+import Loader from '../../../contexts/Loader';
+import { Editor } from '@tinymce/tinymce-react';
+import { showError, showSuccess, showWarning } from '../../../../../../utils/swalHelper';
+
+import { usePayments } from '../../../contexts/PaymentPlanContext';
+import PlanTabs from "../../../weekly-classes/find-a-class/PlanTabs";
+import { usePermission } from "../../../Common/permission";
+import { max } from "date-fns";
+
+const AddPaymentPlanGroup = () => {
+    const [isSavePlan, setIsSavePlan] = useState(false);
+    const MultiValue = () => null; // Hides the default selected boxes
+    const [editIndex, setEditIndex] = useState(null);
+    const [isViewMode, setIsViewMode] = useState(false);
+    const [submitloading, setSubmitLoading] = useState(false);
+    const [groupErrors, setGroupErrors] = useState({});
+    const [planErrors, setPlanErrors] = useState({});
+
+    const groupNameRef = useRef(null);
+    const descriptionRef = useRef(null);
+    const selectedPlansRef = useRef(null);
+
+    const planRefs = {
+        title: useRef(null),
+        price: useRef(null),
+        priceLesson: useRef(null),
+        interval: useRef(null),
+        duration: useRef(null),
+        students: useRef(null),
+    };
+
+    const [groupName, setGroupName] = useState('');
+    const [previewShowModal, setPreviewShowModal] = useState(false);
+    const { fetchPackages, groups, createPackage, fetchGroupById, loading, createGroup, selectedGroup, packages, updateGroup, updatePackage, setPackages } = usePayments();
+    const [selectedPlans, setSelectedPlans] = useState([]);
+    const [isOpen, setIsOpen] = useState(false);
+    const [searchTerm, setSearchTerm] = useState("");
+    const [isEditMode, setIsEditMode] = useState(false);
+    const [isLoading, setIsLoading] = useState(true);
+    const [searchParams] = useSearchParams();
+    const id = searchParams.get("id");
+    const [mounted, setMounted] = useState(false);
+
+    useEffect(() => {
+        setMounted(true);
+    }, [])
+    useEffect(() => {
+        if (id) {
+            console.log('id foud');
+            setIsEditMode(true);
+            fetchGroupById(id);
+        } else {
+            // setIsLoading(false);
+        }
+    }, [id]);
+
+    const [description, setDescription] = useState('');
+    const [packageDetails, setPackageDetails] = useState('');
+    const [terms, setTerms] = useState('');
+    const [plans, setPlans] = useState([]);
+    const [formData, setFormData] = useState({
+        title: '',
+        price: '',
+        priceLesson: '',
+        interval: '',
+        duration: '',
+        students: '',
+        termsAndCondition: '',
+        HolidayCampPackage: '',
+
+    });
+
+    const [formIsDirty, setFormIsDirty] = useState(false);
+
+    const formatStudentLabel = (plan) => {
+        if (plan.students > 0) {
+            return `${plan.title}: ${plan.students} ${plan.students === 1 ? 'Student' : 'Students'}`;
+        }
+        return `${plan.title}`;
+    };
+
+    const planOptions = packages.map((plan) => ({
+        value: plan.id,
+        label: formatStudentLabel(plan),
+        data: plan,
+    }));
+
+    const selectedOptions = selectedPlans.map((plan) => ({
+        value: plan.id,
+        label: formatStudentLabel(plan),
+        data: plan,
+    }));
+
+
+    const handleSelectChange = (selected) => {
+        setSelectedPlans(selected ? selected.map((item) => item.data) : []);
+    };
+    useEffect(() => {
+        const getPackages = async () => {
+            try {
+                const response = await fetchPackages();
+                console.log("Fetched packages:", response);
+
+                if (response?.status && Array.isArray(response.data)) {
+                    setPlans(response.data); // Set the dynamic plans from backend
+                }
+
+            } catch (error) {
+                console.error("Error fetching packages:", error);
+            }
+        };
+
+        getPackages();
+    }, [fetchPackages]);
+    const previewPlans = [
+        { students: '1 Student', price: '£99.99' },
+        { students: '2 Student', price: '£99.99' },
+        { students: '3 Student', price: '£99.99' },
+    ];
+
+    const [openForm, setOpenForm] = useState(false);
+    const navigate = useNavigate();
+
+    const handleAddPlan = () => {
+        setIsViewMode(false);
+        setOpenForm(true);
+    };
+    const handleTogglePlan = (plan) => {
+        const isSelected = selectedPlans.some((p) => p.id === plan.id);
+        if (isSelected) {
+            setSelectedPlans(selectedPlans.filter((p) => p.id !== plan.id));
+        } else {
+            setSelectedPlans([...selectedPlans, plan]);
+        }
+    };
+
+    const handleRemovePlan = (index) => {
+        const updated = [...selectedPlans];
+        updated.splice(index, 1);
+        setSelectedPlans(updated);
+    };
+
+    const filteredPlans = useMemo(() => {
+        return packages.filter((plan) =>
+            plan.title.toLowerCase().includes(searchTerm.toLowerCase())
+        );
+    }, [searchTerm]);
+    const handleCreateGroup = async () => {
+        setSubmitLoading(true); // start loader
+        const ids = selectedPlans.map(plan => plan.id).join(',');
+        const payload = {
+            name: groupName,
+            description: description,
+            plans: ids
+        };
+
+        try {
+            await createGroup(payload);
+        } catch (err) {
+            console.error("Error creating group:", err);
+        } finally {
+            setSubmitLoading(false); // stop loader
+        }
+    };
+
+    const handleUpdateGroup = async () => {
+        setSubmitLoading(true); // start loader
+        const ids = selectedPlans.map(plan => plan.id).join(',');
+        const payload = {
+            name: groupName,
+            description: description,
+            plans: ids
+        };
+
+        try {
+            await updateGroup(id, payload);
+        } catch (err) {
+            console.error("Error updating group:", err);
+        } finally {
+            setSubmitLoading(false); // stop loader
+        }
+    };
+    const priceFields = ["price", "priceLesson"];
+
+    const handleSavePlan = async () => {
+    console.log('--- handleSavePlan START ---');
+
+    console.log('isViewMode:', isViewMode);
+    if (isViewMode) {
+        console.log('❌ Exiting because view mode is ON');
+        return;
+    }
+
+    const { title, price, priceLesson, interval, duration, students } = formData;
+
+    console.log('Form Data:', formData);
+
+    const errors = {};
+    if (!title) errors.title = "Title is required";
+    if (!price) errors.price = "Price is required";
+    if (!priceLesson) errors.priceLesson = "Price per lesson is required";
+    if (!interval) errors.interval = "Interval is required";
+    if (!duration) errors.duration = "Duration is required";
+    if (!students) errors.students = "Number of students is required";
+
+    setPlanErrors(errors);
+
+    if (Object.keys(errors).length > 0) {
+        const firstError = Object.keys(errors)[0];
+        planRefs[firstError].current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        planRefs[firstError].current?.focus();
+        return;
+    }
+
+    const newPlan = {
+        title,
+        price,
+        priceLesson,
+        interval,
+        duration,
+        students,
+        termsAndCondition: formData.termsAndCondition,
+        HolidayCampPackage: formData.HolidayCampPackage
+    };
+
+    console.log('New Plan Payload:', newPlan);
+
+    setIsSavePlan(true);
+    console.log('Saving started...');
+
+    try {
+        console.log('editIndex:', editIndex);
+        console.log('selectedPlans:', selectedPlans);
+
+        if (editIndex !== null && selectedPlans[editIndex]) {
+            console.log('✏️ Updating existing plan...');
+
+            const updatedPlans = [...selectedPlans];
+            const currentPlan = updatedPlans[editIndex];
+
+            console.log('Current Plan:', currentPlan);
+
+            const res = await updatePackage(currentPlan.id, newPlan);
+
+            console.log('API Response:', res);
+
+            // ❗ Handle failure
+            if (!res?.status) {
+                console.log('❌ API returned failure:', res?.message);
+                showError("Update Failed", res?.message || "Something went wrong");
+                return;
+            }
+
+            console.log('✅ API success, updating state...');
+
+            // ✅ Use API response data
+            updatedPlans[editIndex] = res.data;
+
+            console.log('Updated Plans Array:', updatedPlans);
+
+            setSelectedPlans(updatedPlans);
+
+            showSuccess("Updated", res.message || "Plan updated successfully!");
+        } else  {
+                // ✅ FIX 2: actually create new plan instead of just logging
+                const res = await createPackage(newPlan);
+
+                if (!res?.status) {
+                    showError("Create Failed", res?.message || "Something went wrong");
+                    return;
+                }
+
+                setSelectedPlans(prev => [...prev, res.data]);
+                showSuccess("Created", res.message || "Plan created successfully!");
+            }
+
+        // 👉 Reset form only on success
+        console.log('🔄 Resetting form...');
+
+        setFormData({
+            title: '',
+            price: '',
+            interval: '',
+            duration: '',
+            students: '',
+            termsAndCondition: '',
+            HolidayCampPackage: ''
+        });
+
+        setPackageDetails('');
+        setTerms('');
+        setOpenForm(false);
+
+        console.log('✅ Form reset complete');
+
+    } catch (err) {
+        console.error('❌ Error saving plan:', err);
+        showError("Save Failed", "There was an error saving the plan. Please try again.");
+    } finally {
+        console.log('⏹ Saving finished');
+        setIsSavePlan(false);
+        console.log('--- handleSavePlan END ---');
+    }
+};
+
+    useEffect(() => {
+        if (id && selectedGroup) {
+            setGroupName(selectedGroup.name || "");
+            setDescription(selectedGroup.description || "");
+            setSelectedPlans(selectedGroup.paymentPlans || []);
+        }
+    }, [selectedGroup]);
+    const sortedOptions = planOptions.sort((a, b) => {
+        const aSelected = selectedOptions.some(o => o.value === a.value);
+        const bSelected = selectedOptions.some(o => o.value === b.value);
+
+        // If a is selected and b is not, a goes after b
+        if (aSelected && !bSelected) return 1;
+        if (!aSelected && bSelected) return -1;
+        return 0; // keep original order if both selected or both unselected
+    });
+    if (loading) {
+        return (
+            <>
+                <Loader />
+            </>
+        )
+    }
+    const { checkPermission } = usePermission();
+
+    const canCreate =
+        checkPermission({ module: 'payment-plan', action: 'create' });
+
+    console.log('formData.HolidayCampPackage', formData.HolidayCampPackage)
+    const handleViewPlan = (index) => {
+        // 👇 agar same item already open hai → close kar do
+        if (openForm && editIndex === index && isViewMode) {
+            handleCloseForm();
+            return;
+        }
+
+        const plan = selectedPlans[index];
+
+        setFormData({
+            title: plan.title || "",
+            price: plan.price || "",
+            priceLesson: plan.priceLesson || "",
+            interval: plan.interval || "",
+            duration: plan.duration || "",
+            students: plan.students || "",
+            HolidayCampPackage: plan.HolidayCampPackage || "",
+            termsAndCondition: plan.termsAndCondition || "",
+        });
+
+        setEditIndex(index);
+        setIsViewMode(true);
+        setOpenForm(true);
+    };
+    const handleEditPlan = (index) => {
+
+        // 👇 agar same plan already open hai → toggle close
+        if (openForm && editIndex === index && !isViewMode) {
+            handleCloseForm();
+            return;
+        }
+
+        const plan = selectedPlans[index];
+
+        setFormData({
+            title: plan.title || "",
+            price: plan.price || "",
+            priceLesson: plan.priceLesson || "",
+            interval: plan.interval || "",
+            duration: plan.duration || "",
+            students: plan.students || "",
+            HolidayCampPackage: plan.HolidayCampPackage || "",
+            termsAndCondition: plan.termsAndCondition || "",
+        });
+
+        setEditIndex(index);
+        setIsViewMode(false); // 👈 edit mode
+        setOpenForm(true); // 👈 open form
+    };
+    const handleCloseForm = () => {
+        setOpenForm(false);
+        setIsViewMode(false);
+        setEditIndex(null);
+        setPlanErrors({});
+
+        setFormData({
+            title: '',
+            price: '',
+            priceLesson: '',
+            interval: '',
+            duration: '',
+            students: '',
+            termsAndCondition: '',
+            HolidayCampPackage: ''
+        });
+    };
+    const ViewPlanCard = ({ data }) => {
+        const getDurationLabel = () => {
+            if (!data.duration || !data.interval) return "N/A";
+
+            const unit =
+                data.interval === "Month"
+                    ? "month"
+                    : data.interval === "Year"
+                        ? "year"
+                        : "quarter";
+
+            return `${data.duration} ${unit}${data.duration > 1 ? "s" : ""}`;
+        };
+
+        return (
+            <div className="w-full bg-white rounded-2xl p-5">
+
+                {/* Title */}
+                <h2 className="text-lg font-bold text-[#282829] mb-6">
+                    {data.title || "Membership Plan"}
+                </h2>
+
+                <div className="grid grid-cols-2 gap-6">
+
+                    {/* Title */}
+                    <div className="col-span-2">
+                        <label className="block text-[18px] font-semibold mb-2">Title</label>
+                        <input
+                            type="text"
+                            disabled
+                            value={data.title || ""}
+                            className="w-full px-4 py-3 bg-gray-100 border border-gray-200 rounded-lg text-[#282829] font-semibold"
+                        />
+                    </div>
+
+                    {/* Price */}
+                    <div>
+                        <label className="block text-[18px] font-semibold mb-2">Price (₹)</label>
+                        <input
+                            type="text"
+                            disabled
+                            value={data.price || ""}
+                            className="w-full px-4 py-3 bg-gray-100 border border-gray-200 rounded-lg font-semibold"
+                        />
+                    </div>
+
+                    {/* Price per lesson */}
+                    <div>
+                        <label className="block text-[18px] font-semibold mb-2">Price per lesson (₹)</label>
+                        <input
+                            type="text"
+                            disabled
+                            value={data.priceLesson || ""}
+                            className="w-full px-4 py-3 bg-gray-100 border border-gray-200 rounded-lg font-semibold"
+                        />
+                    </div>
+
+                    {/* Interval */}
+                    <div>
+                        <label className="block text-[18px] font-semibold mb-2">Interval</label>
+                        <input
+                            type="text"
+                            disabled
+                            value={data.interval || ""}
+                            className="w-full px-4 py-3 bg-gray-100 border border-gray-200 rounded-lg font-semibold"
+                        />
+                    </div>
+
+                    {/* Duration */}
+                    <div>
+                        <label className="block text-[18px] font-semibold mb-2">Duration</label>
+                        <input
+                            type="text"
+                            disabled
+                            value={getDurationLabel()}
+                            className="w-full px-4 py-3 bg-gray-100 border border-gray-200 rounded-lg font-semibold"
+                        />
+                    </div>
+
+                    {/* Students */}
+                    <div className="col-span-2">
+                        <label className="block text-[18px] font-semibold mb-2">Number of Students</label>
+                        <input
+                            type="number"
+                            disabled
+                            max={4}
+                            value={data.students || ""}
+                            className="w-full px-4 py-3 bg-gray-100 border border-gray-200 rounded-lg font-semibold"
+                        />
+                    </div>
+
+                    {/* Holiday Package */}
+                    <div className="col-span-2">
+                        <label className="block text-[18px] font-semibold mb-2">
+                            Membership Package Details
+                        </label>
+                        <div
+                            className="w-full px-4 py-3 bg-gray-100 border border-gray-200 rounded-lg text-[#282829] text-[16px]"
+                            dangerouslySetInnerHTML={{
+                                __html: data.HolidayCampPackage || "<p>N/A</p>",
+                            }}
+                        />
+                    </div>
+
+                    {/* Terms */}
+                    <div className="col-span-2">
+                        <label className="block text-[18px] font-semibold mb-2">
+                            Terms & Conditions
+                        </label>
+                        <div
+                            className="w-full px-4 py-3 bg-gray-100 border border-gray-200 rounded-lg text-[#282829] text-[16px]"
+                            dangerouslySetInnerHTML={{
+                                __html: data.termsAndCondition || "<p>N/A</p>",
+                            }}
+                        />
+                    </div>
+
+                </div>
+            </div>
+        );
+    };
+    return (
+        <div className=" md:p-6 bg-gray-50 min-h-screen">
+
+            <div className={`flex flex-col md:flex-row justify-between items-start md:items-center mb-4 gap-3 w-full md:w-1/2`}>
+                <h2
+                    onClick={() => {
+                        if (previewShowModal) {
+                            setPreviewShowModal(false);
+                        } else {
+                            navigate('/configuration/weekly-classes/subscription-planManager');
+                        }
+                    }}
+                    className="text-xl md:text-2xl font-semibold flex items-center gap-2 md:gap-3 cursor-pointer hover:opacity-80 transition-opacity duration-200"
+                >
+                    <img
+                        src="/images/icons/arrow-left.png"
+                        alt="Back"
+                        className="w-5 h-5 md:w-6 md:h-6"
+                    />
+                    <span className="truncate">
+                        {previewShowModal ? `${selectedGroup?.name} ` : 'Add Membership Plan Group'}
+                    </span>
+                </h2>
+
+
+            </div>
+
+            <div className={`flex flex-col md:flex-row bg-white rounded-3xl ${previewShowModal ? ' m-auto  md:p-10' : 'w-full  md:p-12 p-4'}`}>
+                {previewShowModal && (
+                    <div className="flex items-center rounded-3xl max-w-fit justify-left bg-white md:w-full px-4 py-6 sm:px-6 md:py-10">
+                        <div className="bg-white rounded-3xl p-4 sm:p-6 w-full max-w-4xl shadow-2xl">
+
+                            {/* Header */}
+                            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-[#E2E1E5] pb-4 mb-4 gap-2">
+                                <h2 className="font-semibold text-[20px] sm:text-[24px]">Subscription Plan</h2>
+                                <button
+                                    onClick={() => setPreviewShowModal(false)}
+                                    className="text-gray-400 hover:text-black text-xl font-bold"
+                                >
+                                    <img src="/images/icons/cross.png" alt="close" className="w-5 h-5" />
+                                </button>
+                            </div>
+
+                            {/* Plans Grid */}
+                            <PlanTabs selectedPlans={selectedPlans} />
+
+
+                        </div>
+                    </div>
+
+                ) ||
+                    <>
+                        <div className={`transition-all duration-300 md:w-1/2`}>
+                            <div className="rounded-2xl w-full md:p-12 ">
+                                <form
+                                    onSubmit={(e) => {
+                                        e.preventDefault();
+
+                                        const errors = {};
+                                        if (!groupName.trim()) errors.groupName = "Membership Plan Group Name is required";
+                                        if (!description.trim()) errors.description = "Description is required";
+                                        if (selectedPlans.length === 0) errors.selectedPlans = "Please select at least one Membership Plan";
+
+                                        setGroupErrors(errors);
+
+                                        if (Object.keys(errors).length > 0) {
+                                            const firstError = Object.keys(errors)[0];
+                                            const refMap = {
+                                                groupName: groupNameRef,
+                                                description: descriptionRef,
+                                                selectedPlans: selectedPlansRef
+                                            };
+                                            refMap[firstError].current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                            refMap[firstError].current?.focus();
+                                            return;
+                                        }
+
+                                        // --- SUBMIT ACTION ---
+                                        if (id && selectedGroup) {
+                                            handleUpdateGroup();
+                                        } else {
+                                            handleCreateGroup();
+                                        }
+                                    }}
+                                    className="mx-auto space-y-6"
+                                >
+                                    {/* Group Name */}
+                                    <div>
+                                        <label className="block text-[18px]  font-semibold text-[#282829] mb-2">
+                                            Membership Plan Group Name
+                                        </label>
+                                        <input
+                                            ref={groupNameRef}
+                                            value={groupName}
+                                            onChange={(e) => {
+                                                setGroupName(e.target.value);
+                                                if (groupErrors.groupName) {
+                                                    setGroupErrors({ ...groupErrors, groupName: null });
+                                                }
+                                            }}
+                                            type="text"
+                                            placeholder="Enter Group Name"
+                                            className={`w-full px-4 text-[#282829] font-semibold py-3 border ${groupErrors.groupName ? 'border-[#F04438]' : 'border-gray-200'} rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                                        />
+                                        {groupErrors.groupName && (
+                                            <p className="text-[#F04438] text-sm mt-1">{groupErrors.groupName}</p>
+                                        )}
+                                    </div>
+
+                                    {/* Description */}
+                                    <div>
+                                        <label className="block text-[18px]  font-semibold text-[#282829] mb-2">
+                                            Description
+                                        </label>
+                                        <input
+                                            ref={descriptionRef}
+                                            value={description}
+                                            onChange={(e) => {
+                                                setDescription(e.target.value);
+                                                if (groupErrors.description) {
+                                                    setGroupErrors({ ...groupErrors, description: null });
+                                                }
+                                            }}
+                                            type="text"
+                                            placeholder="Add Internal reference"
+                                            className={`w-full text-[#282829] px-4 font-semibold py-3 border ${groupErrors.description ? 'border-[#F04438]' : 'border-gray-200'} rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                                        />
+                                        {groupErrors.description && (
+                                            <p className="text-[#F04438] text-sm mt-1">{groupErrors.description}</p>
+                                        )}
+                                    </div>
+
+                                    {/* Payment Plans */}
+                                    <div className="w-full space-y-3" ref={selectedPlansRef}>
+                                        <label className="block text-[18px] font-semibold text-[#282829]">
+                                            Membership Plan
+                                        </label>
+
+                                        {/* Selected summary */}
+                                        <div className={`w-full mb-5 px-4 font-semibold py-3 border ${groupErrors.selectedPlans ? 'border-[#F04438]' : 'border-gray-200'} rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500`}>
+                                            {selectedPlans.map((plan, idx) => (
+                                                <div
+                                                    key={plan.id || idx}
+                                                    className="flex items-center justify-between font-semibold"
+                                                >
+                                                    <span>
+                                                        {plan.students > 0
+                                                            ? `${plan.title}: ${plan.students} ${plan.students === 1 ? "Student" : "Students"
+                                                            }`
+                                                            : ""}
+                                                    </span>
+
+                                                    <div className="flex items-center gap-2">
+                                                        {/* 👁 View */}
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleViewPlan(idx)}
+                                                            className="text-gray-500 hover:text-blue-500"
+                                                        >
+                                                            <Eye size={19} />
+                                                        </button>
+
+                                                        {/* ✏️ Edit */}
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleEditPlan(idx)}
+                                                            className="text-gray-500 hover:text-[#12B76A]"
+                                                        >
+                                                            <Pencil size={19} />
+                                                        </button>
+
+                                                        {/* 🗑 Delete */}
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleRemovePlan(idx)}
+                                                            className="text-gray-500 hover:text-[#F04438]"
+                                                        >
+                                                            <Trash2 size={18} />
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+
+                                        {/* Select (always visible) */}
+                                        <Select
+                                            options={sortedOptions}
+                                            value={selectedOptions}
+                                            onChange={(selected) => {
+                                                handleSelectChange(selected);
+                                                if (groupErrors.selectedPlans) {
+                                                    setGroupErrors({ ...groupErrors, selectedPlans: null });
+                                                }
+                                            }}
+                                            isMulti
+                                            placeholder="Select Membership plans..."
+                                            closeMenuOnSelect={false}
+                                            hideSelectedOptions={false}
+                                            isClearable
+                                            menuPortalTarget={document.body}
+                                            menuPosition="fixed"
+                                            classNamePrefix="react-select"
+                                            styles={{
+                                                control: (base, state) => ({
+                                                    ...base,
+                                                    minHeight: "52px",
+                                                    borderRadius: "12px",
+                                                    borderColor: groupErrors.selectedPlans ? "#EF4444" : state.isFocused ? "#3B82F6" : "#E5E7EB",
+                                                    boxShadow: state.isFocused ? "0 0 0 2px rgba(59,130,246,0.4)" : "none",
+                                                    padding: "0 6px",
+                                                    fontWeight: 600,
+                                                    cursor: "pointer",
+                                                    "&:hover": {
+                                                        borderColor: groupErrors.selectedPlans ? "#EF4444" : "#3B82F6",
+                                                    },
+                                                }),
+
+                                                valueContainer: (base) => ({
+                                                    ...base,
+                                                    padding: "0 8px",
+                                                }),
+
+                                                input: (base) => ({
+                                                    ...base,
+                                                    margin: 0,
+                                                    padding: 0,
+                                                }),
+
+                                                multiValue: (base) => ({
+                                                    ...base,
+                                                    backgroundColor: "#EFF6FF",
+                                                    borderRadius: "8px",
+                                                    padding: "2px 4px",
+                                                }),
+
+                                                multiValueLabel: (base) => ({
+                                                    ...base,
+                                                    color: "#1E40AF",
+                                                    fontWeight: 600,
+                                                }),
+
+                                                multiValueRemove: (base) => ({
+                                                    ...base,
+                                                    color: "#1E40AF",
+                                                    cursor: "pointer",
+                                                    ":hover": {
+                                                        backgroundColor: "#DBEAFE",
+                                                        color: "#1E3A8A",
+                                                    },
+                                                }),
+
+                                                menu: (base) => ({
+                                                    ...base,
+                                                    borderRadius: "12px",
+                                                    zIndex: 9999,
+                                                }),
+
+                                                option: (base, state) => ({
+                                                    ...base,
+                                                    backgroundColor: state.isSelected
+                                                        ? "#3B82F6"
+                                                        : state.isFocused
+                                                            ? "#EFF6FF"
+                                                            : "#fff",
+                                                    color: state.isSelected ? "#fff" : "#111827",
+                                                    cursor: "pointer",
+                                                }),
+                                            }}
+                                        />
+                                        {groupErrors.selectedPlans && (
+                                            <p className="text-[#F04438] text-sm mt-1">{groupErrors.selectedPlans}</p>
+                                        )}
+
+                                    </div>
+
+
+                                    {canCreate &&
+                                        <button
+                                            type="button"
+                                            onClick={handleAddPlan}
+                                            className="w-full bg-[#237FEA] mb-8 text-white text-[16px] font-normal py-3 rounded-xl hover:bg-blue-700"
+                                        >
+                                            Add Membership Plan
+                                        </button>
+                                    }
+                                    {/* Footer Buttons */}
+                                    <div className="flex flex-wrap flex-col-reverse gap-4 md:flex-row md:items-center md:justify-end md:gap-4">
+
+                                        {selectedPlans.length > 0 && (
+                                            <button
+                                                type="button"
+                                                onClick={() => setPreviewShowModal(true)}
+                                                className="flex items-center justify-center gap-1 border-3 border-[#3F8FED] text-[#3F8FED] px-4 py-2 rounded-xl font-medium hover:bg-blue-50 w-full md:w-auto"
+                                            >
+                                                Preview Membership Plans
+                                                <Eye size={19} />
+                                            </button>
+                                        )}
+
+                                        <button
+                                            type="submit"
+                                            disabled={submitloading}
+                                            className={`bg-[#3F8FED] text-white min-w-50 border-3 border-[#3F8FED] font-medium px-6 py-2 rounded-xl w-full md:w-auto ${submitloading ? 'opacity-60 cursor-not-allowed' : 'hover:bg-blue-700'
+                                                }`}
+                                        >
+                                            {loading
+                                                ? (id && selectedGroup ? "Updating..." : "Creating...")
+                                                : (id && selectedGroup ? "Save Group" : "Create Group")}
+                                        </button>
+
+                                    </div>
+
+                                </form>
+                            </div>
+                        </div>
+
+                        <AnimatePresence>
+                            {openForm && (
+                                <motion.div
+                                    initial={{ x: '100%', opacity: 0 }}
+                                    animate={{ x: 0, opacity: 1 }}
+                                    exit={{ x: '100%', opacity: 0 }}
+                                    transition={{ duration: 0.4 }}
+                                    className="w-full md:w-1/2 bg-white rounded-3xl p-6 shadow-2xl relative"
+                                >
+                                    <button
+                                        onClick={handleCloseForm}
+                                        className="absolute top-2 right-3  hover:text-[#282829] text-5xl"
+                                        title="Close"
+                                    >
+                                        &times;
+                                    </button>
+                                    {isViewMode ? (
+                                        <ViewPlanCard data={formData} />
+                                    ) : (
+                                        <>
+                                            <div className="text-[24px] font-semibold mb-4">Membership Plan</div>
+                                            {[
+                                                { label: "Title", name: "title", type: "text" },
+                                                { label: "Price (£)", name: "price", type: "number" },
+                                                { label: "Price per lesson(£)", name: "priceLesson", type: "number" },
+                                                {
+                                                    label: "Interval",
+                                                    name: "interval",
+                                                    type: "dropdown",
+                                                    options: ["Month", "Quarter", "Year"]
+                                                },
+                                                { label: "Duration", name: "duration", type: "number" },
+                                                { label: "Number of Students", name: "students", type: "number" , max : 4 },
+                                            ].map((field) => {
+                                                // Duration options for dropdown
+                                                let durationOptions = [];
+                                                if (field.name === "duration") {
+                                                    if (formData.interval === "Month") {
+                                                        durationOptions = Array.from({ length: 12 }, (_, i) => ({
+                                                            label: `${i + 1} month${i + 1 > 1 ? "s" : ""}`,
+                                                            value: i + 1
+                                                        }));
+                                                    } else if (formData.interval === "Year") {
+                                                        durationOptions = Array.from({ length: 20 }, (_, i) => ({
+                                                            label: `${i + 1} year${i + 1 > 1 ? "s" : ""}`,
+                                                            value: i + 1
+                                                        }));
+                                                    } else if (formData.interval === "Quarter") {
+                                                        durationOptions = Array.from({ length: 8 }, (_, i) => ({
+                                                            label: `${i + 1} quarter${i + 1 > 1 ? "s" : ""}`,
+                                                            value: i + 1
+                                                        }));
+                                                    }
+                                                }
+
+                                                return (
+                                                    <div key={field.name} className="mb-4">
+                                                        <label className="block text-[18px] font-semibold text-[#282829] mb-2">
+                                                            {field.label}
+                                                        </label>
+
+                                                        {field.name === "interval" ? (
+                                                            <div ref={planRefs.interval}>
+                                                                <Select
+                                                                    disabled={isViewMode}
+                                                                    options={field.options.map((opt) => ({ label: opt, value: opt }))}
+                                                                    value={
+                                                                        formData.interval
+                                                                            ? { label: formData.interval, value: formData.interval }
+                                                                            : null
+                                                                    }
+                                                                    onChange={(selected) => {
+                                                                        setFormData({ ...formData, interval: selected.value });
+                                                                        if (planErrors.interval) {
+                                                                            setPlanErrors({ ...planErrors, interval: null });
+                                                                        }
+                                                                    }}
+                                                                    className="text-[18px] font-semibold"
+                                                                    classNamePrefix="react-select"
+                                                                    styles={{
+                                                                        control: (provided, state) => ({
+                                                                            ...provided,
+                                                                            borderRadius: "0.5rem",
+                                                                            padding: "4px",
+                                                                            borderColor: planErrors.interval ? "#EF4444" : state.isFocused ? "#3B82F6" : "#E5E7EB",
+                                                                            boxShadow: "none",
+                                                                            "&:hover": { borderColor: planErrors.interval ? "#EF4444" : "#3B82F6" }
+                                                                        }),
+                                                                        dropdownIndicator: (provided) => ({
+                                                                            ...provided,
+                                                                            display: "none"
+                                                                        }),
+                                                                        indicatorSeparator: () => ({ display: "none" })
+                                                                    }}
+                                                                    placeholder=""
+                                                                />
+                                                                {planErrors.interval && (
+                                                                    <p className="text-[#F04438] text-sm mt-1">{planErrors.interval}</p>
+                                                                )}
+                                                            </div>
+                                                        ) : field.name === "duration" && formData.interval ? (
+                                                            <div>
+                                                                <select
+                                                                    ref={planRefs.duration}
+                                                                    value={formData.duration}
+                                                                    onChange={(e) => {
+                                                                        setFormData({ ...formData, duration: e.target.value });
+                                                                        if (planErrors.duration) {
+                                                                            setPlanErrors({ ...planErrors, duration: null });
+                                                                        }
+                                                                    }}
+                                                                    className={`w-full px-4 py-3 font-semibold text-[18px] text-[#282829] border ${planErrors.duration ? 'border-[#F04438]' : 'border-gray-200'} rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none bg-transparent`}
+                                                                >
+                                                                    <option value="" disabled>
+                                                                        Select Duration
+                                                                    </option>
+                                                                    {durationOptions.map((opt) => (
+                                                                        <option key={opt.value} value={opt.value}>
+                                                                            {opt.label}
+                                                                        </option>
+                                                                    ))}
+                                                                </select>
+                                                                {planErrors.duration && (
+                                                                    <p className="text-[#F04438] text-sm mt-1">{planErrors.duration}</p>
+                                                                )}
+                                                            </div>
+                                                        ) : field.type === "number" ? (
+                                                            <div>
+                                                                <input
+                                                                    ref={planRefs[field.name]}
+                                                                    type="text"
+                                                                    disabled={isViewMode}
+                                                                    value={formData[field.name]}
+                                                                    onChange={(e) => {
+                                                                        const value = e.target.value;
+                                                                        if (planErrors[field.name]) {
+                                                                            setPlanErrors({ ...planErrors, [field.name]: null });
+                                                                        }
+
+                                                                        // Allow only valid price format for price fields
+                                                                        if (priceFields.includes(field.name)) {
+                                                                            if (/^\d*\.?\d{0,2}$/.test(value)) {
+                                                                                setFormData({ ...formData, [field.name]: value });
+                                                                            }
+                                                                            return;
+                                                                        }
+
+                                                                        // Normal text fields
+                                                                        setFormData({ ...formData, [field.name]: value });
+                                                                    }}
+                                                                    onPaste={(e) => {
+                                                                        const paste = e.clipboardData.getData("text");
+
+                                                                        if (
+                                                                            priceFields.includes(field.name) &&
+                                                                            !/^\d*\.?\d{0,2}$/.test(paste)
+                                                                        ) {
+                                                                            e.preventDefault();
+                                                                        }
+                                                                    }}
+                                                                    className={`w-full px-4 py-3 font-semibold text-[18px] text-[#282829] border ${planErrors[field.name] ? 'border-[#F04438]' : 'border-gray-200'} rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none bg-transparent`}
+                                                                />
+                                                                {planErrors[field.name] && (
+                                                                    <p className="text-[#F04438] text-sm mt-1">{planErrors[field.name]}</p>
+                                                                )}
+                                                            </div>
+                                                        ) : (
+                                                            <div>
+                                                                <input
+                                                                    ref={planRefs[field.name]}
+                                                                    type="text"
+                                                                    value={formData[field.name]}
+                                                                    disabled={isViewMode}
+                                                                    onChange={(e) => {
+                                                                        setFormData({ ...formData, [field.name]: e.target.value });
+                                                                        if (planErrors[field.name]) {
+                                                                            setPlanErrors({ ...planErrors, [field.name]: null });
+                                                                        }
+                                                                    }}
+                                                                    className={`w-full text-[#282829] px-4 py-3 font-semibold text-[18px] border ${planErrors[field.name] ? 'border-[#F04438]' : 'border-gray-200'} rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none bg-transparent`}
+                                                                />
+                                                                {planErrors[field.name] && (
+                                                                    <p className="text-[#F04438] text-sm mt-1">{planErrors[field.name]}</p>
+                                                                )}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                );
+                                            })}
+
+                                            <div className="mb-4 relative">
+                                                <label className="block text-[18px] font-semibold text-[#282829] mb-2">
+                                                    Membership Package Details
+                                                </label>
+                                                <div className="rounded-md border border-gray-300 bg-gray-100 p-1">
+                                                    <Editor
+                                                        apiKey="sqe5er2lyngzjf0armhqaw1u7ffh0xgjyzmb7unv5irietwa"
+                                                        value={formData.HolidayCampPackage}
+                                                        onEditorChange={(content) =>
+                                                            setFormData({ ...formData, HolidayCampPackage: content })
+                                                        }
+                                                        init={{
+                                                            readonly: isViewMode ? 1 : 0,
+                                                            menubar: false,
+                                                            plugins: 'lists advlist',
+                                                            toolbar: 'fontsizeselect capitalize bold italic underline alignleft aligncenter alignjustify',
+                                                            height: 200,
+                                                            branding: false,
+                                                            content_style: `
+  body {
+    background-color: #f3f4f6;
+ font-family: "Poppins", sans-serif !important;
+    font-size: 1rem;
+    padding: 0px; /* reduced padding */
+    color: #111827;
+  }
+
+  * {
+    font-family:"Poppins", sans-serif !important;
+  }
+`,
+                                                            setup: (editor) => {
+                                                                // Custom capitalize button
+                                                                editor.ui.registry.addIcon(
+                                                                    'capitalize-icon',
+                                                                    '<img src="/images/icons/smallcaps.png" style="width:16px;height:16px;" />'
+                                                                );
+                                                                editor.ui.registry.addButton('capitalize', {
+                                                                    icon: 'capitalize-icon',
+                                                                    tooltip: 'Capitalize Text',
+                                                                    onAction: () => {
+                                                                        editor.formatter.register('capitalize', {
+                                                                            inline: 'span',
+                                                                            styles: { textTransform: 'capitalize' },
+                                                                        });
+                                                                        editor.formatter.toggle('capitalize');
+                                                                    },
+                                                                });
+
+                                                                // Remove className from content on init
+                                                                editor.on('BeforeSetContent', (e) => {
+                                                                    if (e.content) {
+                                                                        e.content = e.content.replace(/\sclass="[^"]*"/g, '');
+                                                                    }
+                                                                });
+
+                                                                // Also clean pasted content
+                                                                editor.on('PastePostProcess', (e) => {
+                                                                    e.node.innerHTML = e.node.innerHTML.replace(/\sclass="[^"]*"/g, '');
+                                                                });
+                                                            },
+                                                        }}
+                                                    />
+
+
+                                                </div>
+                                            </div>
+
+                                            <div className="mb-4 relative">
+                                                <label className="block text-[18px] font-semibold text-[#282829] mb-2">
+                                                    Terms & Conditions
+                                                </label>
+                                                <div className="rounded-md border border-gray-300 bg-gray-100 p-1">
+                                                    <Editor
+                                                        apiKey="sqe5er2lyngzjf0armhqaw1u7ffh0xgjyzmb7unv5irietwa"
+
+                                                        value={formData.termsAndCondition}
+                                                        onEditorChange={(content) =>
+                                                            setFormData({ ...formData, termsAndCondition: content })
+                                                        }
+                                                        init={{
+                                                            readonly: isViewMode ? 1 : 0,
+                                                            menubar: false,
+                                                            plugins: 'lists advlist',
+                                                            toolbar:
+                                                                'fontsizeselect capitalize bold italic underline alignleft aligncenter alignjustify',
+                                                            height: 200,
+                                                            branding: false,
+                                                            content_style: `
+  body {
+    background-color: #f3f4f6;
+ font-family: "Poppins", sans-serif !important;
+    font-size: 1rem;
+    padding: 0px; /* reduced padding */
+    color: #111827;
+  }
+
+  * {
+    font-family:"Poppins", sans-serif !important;
+  }
+`,
+                                                            setup: (editor) => {
+                                                                // Register custom icon
+                                                                editor.ui.registry.addIcon(
+                                                                    'capitalize-icon',
+                                                                    '<img src="/images/icons/smallcaps.png" style="width:16px;height:16px;" />'
+                                                                );
+
+                                                                // Register and add button
+                                                                editor.ui.registry.addButton('capitalize', {
+                                                                    icon: 'capitalize-icon',
+                                                                    tooltip: 'Capitalize Text',
+                                                                    onAction: () => {
+                                                                        editor.formatter.register('capitalize', {
+                                                                            inline: 'span',
+                                                                            styles: { textTransform: 'capitalize' },
+                                                                        });
+
+                                                                        editor.formatter.toggle('capitalize');
+                                                                    },
+                                                                });
+                                                            },
+                                                        }}
+                                                        onInit={(evt, editor) => {
+                                                            console.log('Editor initialized', editor);
+                                                        }}
+                                                    />
+                                                </div>
+                                            </div>
+
+                                            <div className="text-right">
+                                                <button
+                                                    onClick={handleSavePlan}
+                                                    disabled={isSavePlan || isViewMode}
+                                                    className={`bg-[#237FEA] text-white mt-5 min-w-50 font-semibold px-6 py-2 rounded-lg 
+  ${isSavePlan || isViewMode ? 'bg-gray-400 cursor-not-allowed' : 'hover:bg-blue-700'}`}
+                                                >
+                                                    {isViewMode
+                                                        ? "View Mode"
+                                                        : isSavePlan
+                                                            ? "Saving..."
+                                                            : editIndex !== null
+                                                                ? "Update Plan"
+                                                                : "Save Plan"}
+                                                </button>
+
+                                            </div>
+                                        </>
+                                    )}
+
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
+
+                    </>}
+            </div>
+
+
+        </div>
+    );
+
+}
+export default AddPaymentPlanGroup;

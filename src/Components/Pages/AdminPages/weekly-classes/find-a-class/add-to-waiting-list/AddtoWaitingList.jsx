@@ -1,0 +1,1957 @@
+import React, { useEffect, useRef, useState, useCallback } from 'react';
+// import Create from './Create';
+import { useNavigate } from 'react-router-dom';
+import { Check } from "lucide-react";
+import PlanTabs from '../PlanTabs';
+
+import Loader from '../../../contexts/Loader';
+import { useVenue } from '../../../contexts/VenueContext';
+import { usePayments } from '../../../contexts/PaymentPlanContext';
+import { showSuccess, showError, showConfirm, showWarning } from '../../../../../../utils/swalHelper';
+import { format, parseISO } from "date-fns";
+import { motion, AnimatePresence } from "framer-motion";
+import { X } from "lucide-react"; // Optional: Use any icon or ✖️ if no icon lib
+import { ChevronDown, ChevronUp, Info, CheckCircle2 } from "lucide-react";
+
+import { evaluate } from 'mathjs';
+
+import { FiSearch } from "react-icons/fi";
+import { ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
+import PhoneInput from "react-phone-input-2";
+import 'react-phone-input-2/lib/style.css';
+import DatePicker from "react-datepicker";
+import Select from "react-select";
+import { useLocation } from 'react-router-dom';
+import { useClassSchedule } from '../../../contexts/ClassScheduleContent';
+
+import 'react-datepicker/dist/react-datepicker.css';
+import 'react-phone-input-2/lib/style.css';
+import { useBookFreeTrial } from '../../../contexts/BookAFreeTrialContext';
+import { useMembers } from '../../../contexts/MemberContext';
+import { useNotification } from '../../../contexts/NotificationContext';
+import { useTermContext } from '../../../contexts/TermDatesSessionContext';
+import Comments from '../../../Common/Comments';
+import PhoneNumberInput from '../../../Common/PhoneNumberInput';
+const AddtoWaitingList = () => {
+  const [loadingComment, setLoadingComment] = useState(false);
+  const [expression, setExpression] = useState('');
+  const [result, setResult] = useState('');
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { classId, from_lead, leadId, itemId, comesFrom, studentsData, mainBookingId, parentsData, emergencyData, selectedClassData } = location.state || {};
+  const popup1Ref = useRef(null);
+  const popup2Ref = useRef(null);
+  const popup3Ref = useRef(null);
+  const [isOpen, setIsOpen] = useState(false);
+  const [tempComments, setTempComments] = useState([]);
+
+  const [commentsList, setCommentsList] = useState([]);
+  const [comment, setComment] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const commentsPerPage = 5; // Number of comments per page
+  const [errors, setErrors] = useState({});
+  // Pagination calculations
+  const indexOfLastComment = currentPage * commentsPerPage;
+  const indexOfFirstComment = indexOfLastComment - commentsPerPage;
+  const currentComments = commentsList.slice(indexOfFirstComment, indexOfLastComment);
+  const totalPages = Math.ceil(commentsList.length / commentsPerPage);
+
+  const goToPage = (page) => {
+    if (page < 1) page = 1;
+    if (page > totalPages) page = totalPages;
+    setCurrentPage(page);
+  };
+
+  console.log('comesFrom', comesFrom)
+  // console.log('classId', classId)
+  const { fetchFindClassID, singleClassSchedulesOnly, loading } = useClassSchedule() || {};
+  const { createWaitinglist, createMembershipWaitinglist, isBooked, setIsBooked, submitAllComments } = useBookFreeTrial()
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const { keyInfoData, fetchKeyInfo } = useMembers();
+
+  useEffect(() => {
+    const fetchData = async () => {
+      await fetchKeyInfo();
+      if (classId || itemId) {
+        setIsBooked(false);
+        await fetchFindClassID(classId || itemId);
+        // await fetchComments();
+      }
+    };
+    fetchData();
+  }, [classId, fetchFindClassID]);
+  const [activePopup, setActivePopup] = useState(null);
+  const togglePopup = (id) => {
+    setActivePopup((prev) => (prev === id ? null : id));
+  };
+  const [showModal, setShowModal] = useState(false);
+  const [selectedPlans, setSelectedPlans] = useState([]);
+  const [congestionNote, setCongestionNote] = useState(null);
+  const [numberOfStudents, setNumberOfStudents] = useState(1)
+  // const [selectedDate, setSelectedDate] = useState(null);
+  const { adminInfo, setAdminInfo } = useNotification();
+
+  console.log('selectedPlans', selectedPlans)
+  const formatTimeAgo = (timestamp) => {
+    const now = new Date();
+    const past = new Date(timestamp);
+    const diff = Math.floor((now - past) / 1000); // in seconds
+
+    if (diff < 60) return `${diff} sec${diff !== 1 ? 's' : ''} ago`;
+    if (diff < 3600) return `${Math.floor(diff / 60)} min${Math.floor(diff / 60) !== 1 ? 's' : ''} ago`;
+    if (diff < 86400) return `${Math.floor(diff / 3600)} hour${Math.floor(diff / 3600) !== 1 ? 's' : ''} ago`;
+    if (diff < 604800) return `${Math.floor(diff / 86400)} day${Math.floor(diff / 86400) !== 1 ? 's' : ''} ago`;
+
+    // fallback: return exact date if older than 7 days
+    return past.toLocaleDateString("en-GB", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    });
+  };
+
+  const relationOptions = [
+    { value: "Mother", label: "Mother" },
+    { value: "Father", label: "Father" },
+    { value: "Guardian", label: "Guardian" },
+  ];
+  const interestReasonOptions = [
+    { value: "To build my child's confidence", label: "To build my child's confidence" },
+    { value: "To improve their technical football skills", label: "To improve their technical football skills" },
+    { value: "Because my child loves football", label: "Because my child loves football" },
+    { value: "To help my child make friends and build social skills", label: "To help my child make friends and build social skills" },
+    { value: "To keep my child active and healthy", label: "To keep my child active and healthy" },
+    { value: "High-quality coaching in a fun, positive environment", label: "High-quality coaching in a fun, positive environment" },
+    { value: "Other", label: "Other" },
+
+  ];
+  const ClassOptions = [
+    { value: "4–7 years", label: "4–7 years" },
+    { value: "7–10 years", label: "7-10 years" },
+    { value: "10-12 years ", label: "10-12 years" },
+  ];
+
+  const hearOptions = [
+    { value: "Google", label: "Google" },
+    { value: "Facebook", label: "Facebook" },
+    { value: "Instagram", label: "Instagram" },
+    { value: "Friend", label: "Friend" },
+    { value: "Flyer", label: "Flyer" },
+  ];
+
+  function stripHtml(html) {
+    if (!html) return "";
+    const tempDiv = document.createElement("div");
+    tempDiv.innerHTML = html;
+    return tempDiv.textContent || tempDiv.innerText || "";
+  }
+
+  function htmlToHtmlArray(html) {
+    if (!html) return [];
+    const tempDiv = document.createElement("div");
+    tempDiv.innerHTML = html;
+
+    // 1. Try to find explicit list items and keep their inner HTML
+    const liItems = Array.from(tempDiv.querySelectorAll("li"))
+      .map(li => li.innerHTML.trim())
+      .filter(h => h !== "");
+    if (liItems.length > 0) return liItems;
+
+    // 2. Try to split by common block elements
+    const blockItems = Array.from(tempDiv.querySelectorAll("p, div"))
+      .map(p => p.innerHTML.trim())
+      .filter(h => h !== "");
+    if (blockItems.length > 0) return blockItems;
+
+    // 3. Fallback: split by newlines if it's just raw text
+    const plainText = tempDiv.innerHTML.trim();
+    if (plainText) {
+      return plainText.split(/\n+/).map(t => t.trim()).filter(t => t !== "");
+    }
+
+    return [];
+  }
+
+  // Extract waiting list key info items
+  const waitingListKeyInfo = Array.isArray(keyInfoData)
+    ? keyInfoData.find(item => item.serviceType === 'waiting_list')?.keyInformationRaw
+    : keyInfoData?.keyInformationRaw;
+  const renderContent = (content) => {
+    return (
+      <div
+        className="text-gray-800 prose prose-blue max-w-none"
+        dangerouslySetInnerHTML={{ __html: content }}
+      />
+    );
+  };
+  const keyInfoArray = htmlToHtmlArray(waitingListKeyInfo);
+
+  // Map into dynamic options preserving HTML
+  const keyInfoOptions = keyInfoArray.map((item) => ({
+    value: item,
+    label: item,
+  }));
+  const LevelOfInterest = [
+    { value: "Low", label: "Low" },
+    { value: "Medium", label: "Medium" },
+    { value: "High", label: "High" },
+  ];
+  const [clickedIcon, setClickedIcon] = useState(null);
+  const [selectedRelation, setSelectedRelation] = useState(null);
+  const [selectedKeyInfo, setSelectedKeyInfo] = useState(null);
+  const [selectedHearOptions, setSelectedHearOptions] = useState(null);
+  const [selectedLevelOfInterest, setSelectedLevelOfInterest] = useState(null);
+
+  const handleIconClick = (icon, plan = null) => {
+    setClickedIcon(icon);
+    setCongestionNote(null)
+    if (icon === 'currency') {
+      setSelectedPlans(plan || []); // default to empty array
+    }
+    else if (icon == 'group') {
+      setCongestionNote(plan)
+    }
+    else if (icon == 'p') {
+      setCongestionNote(plan)
+    }
+    else if (icon == 'calendar') {
+      setCongestionNote(plan)
+    }
+    setShowModal(true);
+  };
+
+
+  const { fetchPackages, packages } = usePayments()
+  const { fetchTermGroup, termGroup } = useTermContext()
+
+  const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+  const { venues, formData, setFormData, isEditVenue, setIsEditVenue, deleteVenue, fetchVenues } = useVenue() || {};
+  const [selectedUserIds, setSelectedUserIds] = useState([]);
+  const toggleCheckbox = (userId) => {
+    setSelectedUserIds((prev) =>
+      prev.includes(userId)
+        ? prev.filter((id) => id !== userId)
+        : [...prev, userId]
+    );
+  };
+  const isAllSelected = venues.length > 0 && selectedUserIds.length === venues.length;
+
+  const toggleSelectAll = () => {
+    if (isAllSelected) {
+      setSelectedUserIds([]);
+    } else {
+      const allIds = venues.map((user) => user.id);
+      setSelectedUserIds(allIds);
+    }
+  };
+
+
+  const handleDelete = (id) => {
+    showConfirm(
+      'Are you sure?',
+      'This action will permanently delete the venue.',
+      'Yes, delete it!'
+    ).then((result) => {
+      if (result.isConfirmed) {
+        // console.log('DeleteId:', id);
+
+        deleteVenue(id); // Call your delete function here
+
+      }
+    });
+  };
+
+  const [openForm, setOpenForm] = useState(false);
+
+  const days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+  // useEffect(() => {
+  //     fetchVenues();
+  //     fetchPackages();
+  //     fetchTermGroup();
+  // }, [fetchVenues, fetchPackages, fetchTermGroup]);
+
+  const today = new Date();
+  const [currentDate, setCurrentDate] = useState(new Date());
+  const [fromDate, setFromDate] = useState(new Date(currentDate.getFullYear(), currentDate.getMonth(), 11));
+  const [toDate, setToDate] = useState(null);
+
+  const month = currentDate.getMonth();
+  const year = currentDate.getFullYear();
+  const hasInitialized = useRef(false); const formatLocalDate = (date) => {
+    const year = currentDate.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0"); // months are 0-indexed
+    const day = String(date.getDate()).padStart(2, "0");
+
+    return `${year}-${month}-${day}`; // e.g., "2025-08-10"
+  };
+
+  const [country, setCountry] = useState("uk"); // default country
+  const [country2, setCountry2] = useState("uk"); // default country
+  const [dialCode, setDialCode] = useState("+44"); // store selected code silently
+  const [dialCode2, setDialCode2] = useState("+44"); // store selected code silently
+  const handleChange = (value, data) => {
+    // When library fires onChange, just update the dial code
+    setDialCode("+" + data.dialCode);
+  };
+  const handleChange2 = (value, data) => {
+    // When library fires onChange, just update the dial code
+    setDialCode("+" + data.dialCode);
+  };
+
+  const handleCountryChange = (countryData) => {
+    setCountry(countryData.countryCode);
+    setDialCode2("+" + countryData.dialCode);
+  };
+  const handleCountryChange2 = (countryData) => {
+    setCountry2(countryData.countryCode);
+    setDialCode2("+" + countryData.dialCode);
+  };
+  const getDaysArray = () => {
+    const startDay = new Date(year, month, 1).getDay();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const days = [];
+
+    const offset = startDay === 0 ? 6 : startDay - 1;
+
+    for (let i = 0; i < offset; i++) days.push(null);
+    for (let i = 1; i <= daysInMonth; i++) {
+      days.push(new Date(year, month, i));
+    }
+
+    return days;
+  };
+
+  const calendarDays = getDaysArray();
+
+  const goToPreviousMonth = () => {
+    setCurrentDate(new Date(year, month - 1, 1));
+  };
+
+  const goToNextMonth = () => {
+    setCurrentDate(new Date(year, month + 1, 1));
+  };
+
+  const isSameDate = (d1, d2) => {
+    const date1 = typeof d1 === "string" ? new Date(d1) : d1;
+    const date2 = typeof d2 === "string" ? new Date(d2) : d2;
+
+    return (
+      date1 &&
+      date2 &&
+      date1.getDate() === date2.getDate() &&
+      date1.getMonth() === date2.getMonth() &&
+      date1.getFullYear() === date2.getFullYear()
+    );
+  };
+
+
+
+  const modalRef = useRef(null);
+  const PRef = useRef(null);
+  useEffect(() => {
+    function handleClickOutside(event) {
+      const activeRef = clickedIcon === "group" ? modalRef : PRef;
+
+      if (
+        activeRef.current &&
+        !activeRef.current.contains(event.target)
+      ) {
+        setShowModal(false); // Close the modal
+      }
+    }
+
+    if (showModal) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [showModal, clickedIcon, setShowModal]);
+
+  const [selectedClass, setSelectedClass] = useState();
+
+
+  const allTermRanges = Array.isArray(congestionNote)
+    ? congestionNote.flatMap(group =>
+      group.terms.map(term => ({
+        start: new Date(term.startDate),
+        end: new Date(term.endDate),
+        exclusions: (Array.isArray(term.exclusionDates)
+          ? term.exclusionDates
+          : JSON.parse(term.exclusionDates || '[]')
+        ).map(date => new Date(date)),
+      }))
+    )
+    : [];
+  // or `null`, `undefined`, or any fallback value
+
+  // Usage inside calendar cell:
+  const isInRange = (date) => {
+    return allTermRanges.some(({ start, end }) =>
+      date >= start && date <= end
+    );
+  };
+
+  const isExcluded = (date) => {
+    return allTermRanges.some(({ exclusions }) =>
+      exclusions.some(ex => ex.toDateString() === date?.toDateString())
+    );
+  };
+  const [dob, setDob] = useState('');
+  const [age, setAge] = useState(null);
+  const [time, setTime] = useState('');
+  const [phone, setPhone] = useState('');
+  const [emergencyPhone, setEmergencyPhone] = useState('');
+  const [sameAsAbove, setSameAsAbove] = useState(false);
+
+  // 🔁 Calculate Age Automatically
+  const handleDOBChange = (index, value) => {
+    // Allow only numbers
+    let cleaned = value.replace(/[^\d]/g, "");
+
+    // Auto format → DD/MM/YYYY
+    if (cleaned.length > 2 && cleaned.length <= 4) {
+      cleaned = `${cleaned.slice(0, 2)}/${cleaned.slice(2)}`;
+    } else if (cleaned.length > 4) {
+      cleaned = `${cleaned.slice(0, 2)}/${cleaned.slice(2, 4)}/${cleaned.slice(4, 8)}`;
+    }
+
+    const updatedStudents = [...students];
+    updatedStudents[index].dateOfBirth = cleaned;
+
+    // Calculate age when full date entered
+    if (cleaned.length === 10) {
+      const [day, month, year] = cleaned.split("/").map(Number);
+
+      const date = new Date(year, month - 1, day);
+
+      const isValid =
+        date &&
+        date.getDate() === day &&
+        date.getMonth() === month - 1 &&
+        date.getFullYear() === year;
+
+      if (isValid) {
+        const today = new Date();
+        let ageNow = today.getFullYear() - year;
+        const m = today.getMonth() - (month - 1);
+
+        if (m < 0 || (m === 0 && today.getDate() < day)) {
+          ageNow--;
+        }
+
+        // Apply same limits (3–100)
+        updatedStudents[index].age =
+          ageNow >= 3 && ageNow <= 100 ? ageNow : "";
+      } else {
+        updatedStudents[index].age = "";
+      }
+    } else {
+      updatedStudents[index].age = "";
+    }
+
+    setStudents(updatedStudents);
+  };
+
+
+
+
+  // 🔁 Sync Emergency Contact
+
+  const [students, setStudents] = useState([
+    {
+      studentFirstName: '',
+      studentLastName: '',
+      dateOfBirth: null,
+      age: '',
+      gender: '',
+      medicalInformation: '',
+      // Add other fields if needed
+    },
+  ]);
+
+  const handleInputChange = (index, field, value) => {
+    const updatedStudents = [...students];
+    updatedStudents[index][field] = value;
+    setStudents(updatedStudents);
+  };
+  const handleRemoveStudent = (indexToRemove) => {
+    setStudents((prevStudents) => {
+      const updatedStudents = prevStudents.filter((_, i) => i !== indexToRemove);
+
+      // ✅ IMPORTANT: sync input field
+      setNumberOfStudents(updatedStudents.length);
+
+      return updatedStudents;
+    });
+  };
+  useEffect(() => {
+    setStudents((prevStudents) => {
+      const n = Number(numberOfStudents) || 0; // safety for null/undefined
+
+      // If count increases → add new blank students
+      if (n > prevStudents.length) {
+        const newStudents = Array.from({ length: n - prevStudents.length }).map(() => ({
+          studentFirstName: '',
+          studentLastName: '',
+          dateOfBirth: null,
+          age: '',
+          gender: '',
+          medicalInformation: '',
+          class: selectedClassData?.className || singleClassSchedulesOnly?.className || '',
+          time: selectedClassData?.startTime || singleClassSchedulesOnly?.startTime || '',
+        }));
+        return [...prevStudents, ...newStudents];
+      }
+
+      // If count decreases → trim array
+      if (n < prevStudents.length) {
+        return prevStudents.slice(0, n);
+      }
+
+      // Same number → just return as is
+      return prevStudents;
+    });
+  }, [numberOfStudents]);
+  const formatDateToDDMMYYYY = (dateStr) => {
+    if (!dateStr) return "";
+
+    // ✅ Already in DD/MM/YYYY → return as it is
+    if (dateStr.includes("/")) return dateStr;
+
+    // ✅ Handle YYYY-MM-DD only
+    if (dateStr.includes("-")) {
+      const parts = dateStr.split("-");
+
+      if (parts.length === 3) {
+        const [year, month, day] = parts;
+
+        if (year && month && day) {
+          return `${day}/${month}/${year}`;
+        }
+      }
+    }
+
+    // ❌ Invalid format fallback
+    return "";
+  };
+  useEffect(() => {
+    if (studentsData) {
+      const formattedStudents = studentsData.map((student) => ({
+        ...student,
+        dateOfBirth: formatDateToDDMMYYYY(student.dateOfBirth),
+      }));
+      setStudents(formattedStudents);
+    }
+    console.log('selectedClassData', selectedClassData)
+    if (selectedClassData) {
+      setSelectedClass(selectedClassData);
+    }
+    if (parentsData) {
+      setParents(parentsData);
+    }
+    if (emergencyData) {
+      setEmergency(emergencyData);
+    }
+  }, [studentsData, parentsData, emergencyData]);
+
+
+
+
+  const [parents, setParents] = useState([
+    {
+      id: Date.now(),
+      parentFirstName: '',
+      parentLastName: '',
+      parentEmail: '',
+      parentPhoneNumber: '',
+      relationToChild: '',
+      interestReason: '',
+      interestReasonOther: '',
+      howDidYouHear: ''
+
+    }
+  ]);
+  const handleAddParent = () => {
+    setParents((prev) => [
+      ...prev,
+      {
+        id: Date.now(),
+        parentFirstName: '',
+        parentLastName: '',
+        parentEmail: '',
+        parentPhoneNumber: '',
+        relationToChild: '',
+        interestReason: '',
+        interestReasonOther: '',
+        howDidYouHear: ''
+      },
+    ]);
+  };
+
+  const handleRemoveParent = (id) => {
+    setParents((prev) => prev.filter((p) => p.id !== id));
+  };
+
+  const handleStudentChange = (index, field, value) => {
+    const updated = [...students];
+    updated[index][field] = value;
+
+    // Calculate age if dateOfBirth
+    if (field === "dateOfBirth") {
+      const birth = new Date(value);
+      const today = new Date();
+      updated[index].age = today.getFullYear() - birth.getFullYear();
+    }
+
+    setStudents(updated);
+  };
+  const handleParentChange = (index, field, value) => {
+    const updated = [...parents];
+    updated[index][field] = value;
+    setParents(updated);
+  };
+
+  const handleEmergencyChange = (studentIndex, field, value) => {
+    const updated = [...students];
+    updated[studentIndex].emergency[field] = value;
+    setStudents(updated);
+  };
+  const fetchComments = useCallback(async () => {
+    const token = localStorage.getItem("adminToken");
+    if (!token) return;
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/admin/waiting-list/comment/list`, {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      const resultRaw = await response.json();
+      const result = resultRaw.data || [];
+      setCommentsList(result);
+    } catch (error) {
+      console.error("Failed to fetch comments:", error);
+
+      showError("Error", error.message || error.error || "Failed to fetch comments. Please try again later.");
+    }
+  }, []);
+
+
+  const handleSubmitComment = (e) => {
+    e.preventDefault();
+
+    if (!comment.trim()) return;
+
+    const newComment = {
+      comment: comment,
+      createdAt: new Date().toISOString(),
+      bookedByAdmin: {
+        firstName: adminInfo?.firstName || "Admin",
+        lastName: adminInfo?.lastName || "",
+        profile: adminInfo?.profile || "/members/dummyuser.png"
+      }
+    };
+
+    setTempComments((prev) => [newComment, ...prev]);
+
+    setComment('');
+  };
+  const token = localStorage.getItem("adminToken");
+
+  const handleSameAsAbove = (studentIndex) => {
+    const updated = [...students];
+    const primaryParent = updated[studentIndex].parents[0];
+    if (primaryParent) {
+      updated[studentIndex].emergency = {
+        parentFirstName: primaryParent.parentFirstName,
+        parentLastName: primaryParent.parentLastName,
+        parentPhoneNumber: primaryParent.parentPhoneNumber,
+        relationToChild: primaryParent.relationToChild?.label || "",
+        interestReason: primaryParent.interestReason,
+        interestReasonOther: primaryParent.interestReasonOther,
+        sameAsAbove: true
+      };
+    }
+    setStudents(updated);
+  };
+  const handlePhoneChange = (index, value) => {
+    const updated = [...parents];
+    updated[index].phone = value;
+    setParents(updated);
+  };
+  const [emergency, setEmergency] = useState({
+    sameAsAbove: false,
+    emergencyFirstName: "",
+    emergencyLastName: "",
+    emergencyPhoneNumber: "",
+    emergencyRelation: "",
+  });
+  useEffect(() => {
+    if (emergency.sameAsAbove && parents.length > 0) {
+      const firstParent = parents[0];
+      setEmergency(prev => ({
+        ...prev,
+        emergencyFirstName: firstParent.parentFirstName || "",
+        emergencyLastName: firstParent.parentLastName || "",
+        emergencyPhoneNumber: firstParent.parentPhoneNumber || "",
+        emergencyRelation: firstParent.relationToChild || "", // or whatever default you want
+      }));
+    }
+  }, [emergency.sameAsAbove, parents]);
+
+
+  const toDateOnly = (date) => {
+    if (!date) return null;
+
+    const [day, month, year] = date.split("/").map(Number);
+
+    // Validate first
+    if (!day || !month || !year) return null;
+
+    const d = new Date(year, month - 1, day);
+
+    // Extra validation (same jo tumne upar kiya hai)
+    if (
+      d.getDate() !== day ||
+      d.getMonth() !== month - 1 ||
+      d.getFullYear() !== year
+    ) {
+      return null;
+    }
+
+    const formattedMonth = String(month).padStart(2, "0");
+    const formattedDay = String(day).padStart(2, "0");
+
+    return `${year}-${formattedMonth}-${formattedDay}`;
+  };
+  const handleStudentClassChange = (index, selectedOption) => {
+    const selectedClass = singleClassSchedulesOnly?.venueClasses?.find(
+      (cls) => cls.id === selectedOption.value
+    );
+
+    setStudents((prev) => {
+      const updated = [...prev];
+      updated[index] = {
+        ...updated[index],
+        selectedClassId: selectedOption.value,
+        selectedClassData: selectedClass
+      };
+      return updated;
+    });
+  };
+  const venueClassOptions = singleClassSchedulesOnly?.venueClasses?.filter((cls) => cls.capacity == 0)?.map((cls) => ({
+    value: cls.id,
+     label: `${cls.className} (${cls.level ?? cls.levelName ?? cls.classLevel ?? ''})` 
+  }));
+  const handleAfterBooking = async (result) => {
+    console.log("Booking successful, now submitting comments if any...", result);
+    const types = {
+      commentType: "waiting list",
+      serviceType: "weekly class"
+    };
+
+    try {
+      console.log("Submitting comments tempComments:", tempComments);
+      console.log("Submitting comments parentAdminId:", result?.data);
+      if (tempComments.length > 0 && result?.data?.parentAdminId) {
+
+        await submitAllComments(tempComments, result.data.parentAdminId, types);
+        setTempComments([]);
+      }
+    } catch (err) {
+      console.error("Comment submit failed:", err);
+    }
+  };
+  const handleSubmit = async () => {
+    const { newErrors, firstErrorField } = validateForm();
+
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+
+      // 🔥 Scroll to first error field
+      const el = document.getElementById(firstErrorField);
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+        el.focus();
+      }
+
+      return;
+    }
+
+    setIsSubmitting(true); // Start loading
+
+    const payload = {
+      interest: selectedLevelOfInterest,
+      keyInformation: selectedKeyInfo,
+      venueId: singleClassSchedulesOnly?.venue?.id,
+
+
+      totalStudents: students.length,
+      students: students.map((s, index) => ({
+        ...s,
+        dateOfBirth: toDateOnly(s.dateOfBirth),
+        classScheduleId:
+          index === 0
+            ? singleClassSchedulesOnly?.id
+            : s.selectedClassData?.id
+      })),
+      parents: parents.map(({ id, ...rest }) => rest),
+      emergency,
+    };
+    console.log('comesFrom', comesFrom)
+    // return
+    try {
+      let res;
+
+      if (leadId && comesFrom != "membership" && comesFrom != "trials") {
+        res = await createWaitinglist(payload, leadId);
+      }
+      if (comesFrom == "membership" || comesFrom == "trials") {
+
+        res = await createMembershipWaitinglist(payload, mainBookingId);
+      }
+      else {
+        res = await createWaitinglist(payload);
+      } // assume it's a promise
+      setIsBooked(true);
+
+      await handleAfterBooking(res);
+      navigate(`/weekly-classes/find-a-class/add-to-waiting-list/list`)
+      // console.log("Final Payload:", JSON.stringify(payload, null, 2));
+      // Optionally show success alert or reset form
+    } catch (error) {
+      console.error("Error while submitting:", error);
+      // Optionally show error alert
+    } finally {
+      setIsSubmitting(false); // Stop loading
+    }
+  };
+
+
+  const handleClick = (val) => {
+    if (val === 'AC') {
+      setExpression('');
+      setResult('');
+    } else if (val === '⌫') {
+      setExpression((prev) => prev.slice(0, -1));
+    } else if (val === '=') {
+      try {
+        const replacedExpr = expression
+          .replace(/×/g, '*')
+          .replace(/÷/g, '/')
+          .replace(/−/g, '-');
+        const evalResult = evaluate(replacedExpr);
+        setResult(evalResult.toLocaleString());
+      } catch {
+        setResult('Error');
+      }
+    } else if (val === '±') {
+      if (result) {
+        const toggled = parseFloat(result.replace(/,/g, '')) * -1;
+        setExpression(toggled.toString());
+        setResult(toggled.toLocaleString());
+      } else if (expression) {
+        // Match the last number in expression
+        const match = expression.match(/(-?\d+\.?\d*)$/);
+        if (match) {
+          const number = match[0];
+          const toggled = parseFloat(number) * -1;
+          setExpression((prev) =>
+            prev.replace(new RegExp(`${number}$`), toggled.toString())
+          );
+        }
+      }
+    } else {
+      setExpression((prev) => prev + val);
+      setResult('');
+    }
+  };
+  const renderExpression = () => {
+    const tokens = expression.split(/([+\u2212×÷%])/g); // \u2212 is the unicode minus (−)
+    return tokens.map((token, i) => {
+      const isOperator = ['+', '−', '×', '÷', '%'].includes(token);
+      return (
+        <span key={i} className={isOperator ? 'text-[#F94D5C]' : ''}>
+          {token || 0}
+        </span>
+      );
+    });
+  };
+
+  // console.log('"2025-08-01"', selectedDate)
+
+  const buttons = [
+    ['AC', '±', '%', '÷',],
+    ["7", "8", "9", "×"],
+    ["4", "5", "6", "−"],
+    ["1", "2", "3", "+"],
+    ["", "0", ".", "="],
+
+  ];
+  const handleClickOutside = (e) => {
+    if (
+      activePopup === 1 && popup1Ref.current && !popup1Ref.current.contains(e.target)
+      || activePopup === 2 && popup2Ref.current && !popup2Ref.current.contains(e.target)
+      || activePopup === 3 && popup3Ref.current && !popup3Ref.current.contains(e.target)
+    ) {
+      togglePopup(null);
+    }
+  };
+
+  useEffect(() => {
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [activePopup]);
+  useEffect(() => {
+    const paymentPlans =
+      singleClassSchedulesOnly?.venue?.paymentGroups?.[0]?.paymentPlans || [];
+
+    if (paymentPlans.length > 0) {
+      const cleanedPlans = paymentPlans.map(plan => ({
+        id: plan.id,
+        title: plan.title,
+        price: plan.price,
+        interval: plan.interval,
+        students: plan.students,
+        duration: plan.duration,
+        joiningFee: plan.joiningFee,
+        holidayCampPackage: plan.HolidayCampPackage,
+        termsAndCondition: plan.termsAndCondition,
+      }));
+
+      setSelectedPlans(cleanedPlans);
+    }
+  }, [singleClassSchedulesOnly]);
+
+  // console.log('singleClassSchedulesOnly?.venue?', singleClassSchedulesOnly)
+
+  const genderOptions = [
+    { value: "male", label: "Male" },
+    { value: "female", label: "Female" },
+    { value: "other", label: "Other" },
+  ];
+  const sessionDates = singleClassSchedulesOnly?.venue?.termGroups?.flatMap(group =>
+    group.terms.flatMap(term =>
+      term.sessionsMap.map(s => s.sessionDate)
+    )
+  ) || [];
+
+  // Convert to YYYY-MM-DD set for quick lookup
+  const sessionDatesSet = new Set(sessionDates);
+
+  const selectedLabel =
+    keyInfoOptions.find((opt) => opt.value === selectedKeyInfo)?.label ||
+    "Key Information";
+
+  useEffect(() => {
+    // Run only once, and only if there are session dates
+    if (hasInitialized.current || !sessionDatesSet || sessionDatesSet.size === 0) return;
+
+    const allDates = Array.from(sessionDatesSet)
+      .map(dateStr => new Date(dateStr))
+      .sort((a, b) => a - b);
+
+    const earliestDate = allDates[0];
+
+    setCurrentDate(
+      new Date(
+        earliestDate.getFullYear(),
+        earliestDate.getMonth(),
+        1
+      )
+    );
+
+    hasInitialized.current = true; // ✅ mark as done
+  }, [sessionDatesSet]);
+  const validateForm = () => {
+    let newErrors = {};
+    let firstErrorField = null;
+
+    // Students
+    students.forEach((s, index) => {
+      if (!s.studentFirstName?.trim()) {
+        newErrors[`studentFirstName-${index}`] = "First name required";
+        if (!firstErrorField) firstErrorField = `studentFirstName-${index}`;
+      }
+      if (!s.studentLastName?.trim()) {
+        newErrors[`studentLastName-${index}`] = "Last name required";
+        if (!firstErrorField) firstErrorField = `studentLastName-${index}`;
+      }
+      if (!s.dateOfBirth) {
+        newErrors[`dob-${index}`] = "DOB required";
+      }
+      if (!s.gender) {
+        newErrors[`gender-${index}`] = "Gender required";
+      }
+      if (!s.medicalInformation?.trim()) {
+        newErrors[`medicalInformation-${index}`] = "Medical info required (write 'None' if applicable)";
+        if (!firstErrorField) firstErrorField = `medicalInformation-${index}`;
+      }
+    });
+
+    // Parents
+    parents.forEach((p, index) => {
+      if (!p.parentFirstName?.trim()) {
+        newErrors[`parentFirstName-${index}`] = "Parent first name required";
+        if (!firstErrorField) firstErrorField = `parentFirstName-${index}`;
+      }
+      if (!p.parentLastName?.trim()) {
+        newErrors[`parentLastName-${index}`] = "Parent last name required";
+        if (!firstErrorField) firstErrorField = `parentLastName-${index}`;
+      }
+      if (!p.parentEmail?.trim()) {
+        newErrors[`parentEmail-${index}`] = "Parent email required";
+        if (!firstErrorField) firstErrorField = `parentEmail-${index}`;
+      } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(p.parentEmail)) {
+        newErrors[`parentEmail-${index}`] = "Enter a valid email address";
+        if (!firstErrorField) firstErrorField = `parentEmail-${index}`;
+      }
+      if (!p.parentPhoneNumber?.trim()) {
+        newErrors[`parentPhoneNumber-${index}`] = "Phone required";
+        if (!firstErrorField) firstErrorField = `parentPhoneNumber-${index}`;
+      }
+      if (!p.interestReason) {
+        newErrors[`interestReason-${index}`] = "Selection required";
+        if (!firstErrorField) firstErrorField = `interestReason-${index}`;
+      }
+      if (!p.relationToChild) {
+        newErrors[`relationToChild-${index}`] = "Relation required";
+        if (!firstErrorField) firstErrorField = `relationToChild-${index}`;
+      }
+      if (!p.howDidYouHear) {
+        newErrors[`howDidYouHear-${index}`] = "Selection required";
+        if (!firstErrorField) firstErrorField = `howDidYouHear-${index}`;
+      }
+    });
+
+    // Level
+    if (!selectedLevelOfInterest) {
+      newErrors["level"] = "Select level of interest";
+      if (!firstErrorField) firstErrorField = "level";
+    }
+
+    // Key Info
+
+
+    // Emergency
+    if (!emergency.sameAsAbove) {
+      if (!emergency.emergencyFirstName?.trim()) {
+        newErrors["emergencyFirstName"] = "First name required";
+        if (!firstErrorField) firstErrorField = "emergencyFirstName";
+      }
+      if (!emergency.emergencyLastName?.trim()) {
+        newErrors["emergencyLastName"] = "Last name required";
+        if (!firstErrorField) firstErrorField = "emergencyLastName";
+      }
+      if (!emergency.emergencyPhoneNumber?.trim()) {
+        newErrors["emergencyPhoneNumber"] = "Phone required";
+        if (!firstErrorField) firstErrorField = "emergencyPhoneNumber";
+      }
+      if (!emergency.emergencyRelation) {
+        newErrors["emergencyRelation"] = "Relation required";
+        if (!firstErrorField) firstErrorField = "emergencyRelation";
+      }
+    }
+
+    return { newErrors, firstErrorField };
+  };
+  const clearError = (field) => {
+    setErrors((prev) => {
+      const updated = { ...prev };
+      delete updated[field];
+      return updated;
+    });
+  };
+
+  if (loading) {
+    return (
+      <>
+        <Loader />
+      </>
+    )
+  }
+
+  return (
+    <div className="pt-1 bg-gray-50 min-h-screen">
+      <div className={`flex pe-4 justify-between items-center mb-4 ${openForm ? 'md:w-3/4' : 'w-full'}`}>
+
+        <h2 onClick={() => {
+
+          if (from_lead === "leadDatabase") {
+            navigate("/weekly-classes/central-leads");
+          } else if (from_lead === "yes") {
+            navigate("/weekly-classes/central-leads");
+          }
+          else {
+            navigate("/weekly-classes/find-a-class");
+          }
+        }}
+          className="text-xl md:text-2xl font-semibold flex items-center gap-2 md:gap-3 cursor-pointer hover:opacity-80 transition-opacity duration-200"
+        >
+          <img
+            src="/images/icons/arrow-left.png"
+            alt="Back"
+            className="w-5 h-5 md:w-6 md:h-6"
+          />
+          <span className="truncate">
+            Add to Waiting List
+          </span>
+        </h2>
+        <div className="flex gap-3 relative items-center">
+          <img
+            src="/members/booktrial1.png"
+            className={` rounded-full  hover:bg-[#0DD180] transition cursor-pointer ${activePopup === 1 ? 'bg-[#0DD180]' : 'bg-gray-700'} `}
+            onClick={() => togglePopup(1)}
+          />
+          {activePopup === 1 && (
+            <div ref={popup1Ref} className="  absolute min-w-[850px] bg-opacity-30 flex right-2 items-center top-15 justify-center z-50">
+              <div className="flex items-center justify-center w-full px-2 py-6 sm:px-2 md:py-2">
+                <div className="bg-white rounded-3xl p-4 sm:p-6 w-full max-w-4xl shadow-2xl">
+                  {/* Header */}
+                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-[#E2E1E5] pb-4 mb-4 gap-2">
+                    <h2 className="font-semibold text-[20px] sm:text-[24px]">Payment Plan Preview</h2>
+                    <button className="text-gray-400 hover:text-black text-xl font-bold">
+                      <img src="/images/icons/cross.png" onClick={() => togglePopup(null)} alt="close" className="w-5 h-5" />
+                    </button>
+                  </div>
+                  <PlanTabs selectedPlans={selectedPlans} />
+                </div>
+              </div>
+            </div>
+          )}
+          <img
+            onClick={() => togglePopup(2)}
+            src="/members/booktrial2.png"
+            className={` rounded-full  hover:bg-[#0DD180] transition cursor-pointer ${activePopup === 2 ? 'bg-[#0DD180]' : 'bg-gray-700'} `}
+            alt=""
+          />
+          {activePopup === 2 && (
+            <div ref={popup2Ref} className="absolute right-0 top-20 z-50 flex items-center justify-center min-w-[320px]">
+              <div className="bg-[#464C55] rounded-2xl p-4 w-[468px] shadow-2xl text-white">
+                {/* Display */}
+                <div className="text-right min-h-[80px] mb-4">
+                  <div className="text-[24px] text-gray-300 break-words">
+                    {renderExpression()}
+
+                  </div>
+                  <div className="text-[56px] font-bold text-white leading-snug">
+                    {result !== "" && result}
+                  </div>
+                </div>
+
+                {/* Buttons */}
+                <div className="grid grid-cols-4 gap-3">
+                  {buttons.flat().map((btn, i) => {
+                    const isOperator = ['÷', '±', '×', '−', '+', '%', '=', 'AC'].includes(btn);
+                    const iconMap = {
+                      '÷': '/calcIcons/divide.png',
+                      '%': '/calcIcons/percentage.png',
+                      '⌫': '/calcIcons/np.png',
+                      '×': '/calcIcons/multiply.png',
+                      '−': '/calcIcons/sub.png',
+                      '+': '/calcIcons/add.png',
+                      '=': '/calcIcons/equal.png',
+                      '±': '/calcIcons/NP.png',
+                    };
+
+                    const showRed = ['+', '−', '×', '÷', '%'].includes(btn) && expression.includes(btn);
+
+                    return (
+                      <button
+                        key={i}
+                        onClick={() => btn && handleClick(btn)}
+                        className={`
+                py-4 rounded-2xl text-[36px] font-semibold flex items-center justify-center h-16 transition-all duration-150
+                ${isOperator ? 'bg-[#81858B] text-white' : 'bg-white text-black hover:bg-gray-100'}
+                ${showRed ? 'text-[#F94D5C]' : ''}
+                ${btn === '' ? 'opacity-0 pointer-events-none' : ''}
+            `}
+                      >
+                        {iconMap[btn] ? (
+                          <img src={iconMap[btn]} alt={btn} className="w-5 h-5 object-contain" />
+                        ) : (
+                          btn
+                        )}
+                      </button>
+                    );
+                  })}
+
+                </div>
+
+              </div>
+            </div>
+
+          )}
+
+
+
+
+          <img
+            src="/members/booktrial3.png"
+            alt=""
+            onClick={() => togglePopup(3)}
+            className={` rounded-full  hover:bg-[#0DD180] transition cursor-pointer ${activePopup === 3 ? 'bg-[#0DD180]' : 'bg-gray-700'} `}
+          />
+          {activePopup === 3 && (
+            <div ref={popup3Ref} className="absolute top-full z-99 mt-8 right-0 w-100 p-4 bg-white rounded-2xl shadow-lg text-sm leading-relaxed text-gray-700">
+              <div className="font-semibold mb-2 text-[18px]">Phone Script</div>
+              <textarea
+                readOnly
+                className="w-full  min-h-[100px] max-w-[375px]  min-w-[375px]  resize text-[16px]  leading-relaxed bg-transparent focus:outline-none"
+                defaultValue="In publishing and graphic design, Lorem ipsum is a placeholder text commonly used to demonstrate the visual form of a document or a typeface."
+              />
+            </div>
+
+          )}
+
+        </div>
+      </div>
+      <div className="md:flex w-full gap-4">
+        <div className="md:min-w-[508px] md:max-w-[508px] text-base space-y-5">
+          {/* Search */}
+          <div className="space-y-3 bg-white p-6 rounded-3xl shadow-sm ">
+            <h2 className="text-[24px] font-semibold">Enter Trial Information</h2>
+            <div className="">
+              <label htmlFor="" className="text-base font-semibold">Venue</label>
+              <div className="relative mt-2 ">
+                <input
+                  type="text"
+                  placeholder="Select venue"
+                  value={singleClassSchedulesOnly?.venue?.name}
+                  readOnly
+                  className="w-full border border-gray-300 rounded-xl px-3 text-[16px] py-3 pl-9 focus:outline-none"
+
+                />
+                <FiSearch className="absolute left-3 top-4 text-[20px]" />
+              </div>
+            </div>
+            <div className="mb-5">
+              <label htmlFor="" className="text-base font-semibold">Number of students</label>
+              <div className="relative mt-2 ">
+
+                <input
+                  type="number"
+                  value={numberOfStudents}
+                  onChange={(e) => {
+                    const val = Number(e.target.value);
+                    if ([1, 2, 3, 4].includes(val) || e.target.value === "") {
+                      setNumberOfStudents(e.target.value);
+                    }
+                    // Do nothing if invalid
+                  }}
+                  placeholder="Choose number of students"
+                  className="w-full border border-gray-300 rounded-xl px-3 text-[16px] py-3 focus:outline-none"
+                />
+
+              </div>
+            </div>
+          </div>
+
+
+
+        </div>
+
+        <div className="flex-1 bg-white transition-all duration-300">
+          <div className="max-w-full mx-auto bg-[#f9f9f9] px-6 ">
+
+            <div className="space-y-10   ">
+              {students.map((student, index) => (
+                <motion.div
+                  key={index}
+                  initial={{ opacity: 0, y: 30 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.4, delay: index * 0.1 }}
+                  className="bg-white mb-10 p-6 rounded-3xl shadow-sm space-y-6 relative"
+                >
+                  {students.length > 1 && (
+                    <button
+                      onClick={() => handleRemoveStudent(index)}
+                      className="absolute top-4 right-4 text-[#F04438] hover:text-red-700 text-xl"
+                    >
+                      ✕
+                    </button>
+                  )}
+                  <h2 className="text-[20px] font-semibold">
+                    Student {index + 1} Information
+                  </h2>
+
+                  {/* Row 1 */}
+                  <div className="flex gap-4">
+                    <div className="w-1/2">
+                      <label className="block text-[16px] font-semibold">First name</label>
+                      <input
+                        id={`studentFirstName-${index}`}
+                        className={`w-full mt-2 px-4 py-3 rounded-xl border
+              ${errors[`studentFirstName-${index}`] ? "border-[#F04438]" : "border-gray-300"}`}
+                        placeholder="Enter first name"
+                        value={student.studentFirstName}
+                        onChange={(e) => {
+                          handleInputChange(index, "studentFirstName", e.target.value);
+                          clearError(`studentFirstName-${index}`);
+                        }}
+                      />
+                      {errors[`studentFirstName-${index}`] && (
+                        <p className="text-[#F04438] text-xs mt-1">{errors[`studentFirstName-${index}`]}</p>
+                      )}
+                    </div>
+                    <div className="w-1/2">
+                      <label className="block text-[16px] font-semibold">Last name</label>
+                      <input
+                        id={`studentLastName-${index}`}
+                        onChange={(e) => {
+                          handleInputChange(index, "studentLastName", e.target.value);
+                          clearError(`studentLastName-${index}`);
+                        }}
+                        className={`w-full mt-2 px-4 py-3 rounded-xl border
+              ${errors[`studentLastName-${index}`] ? "border-[#F04438]" : "border-gray-300"}`}
+                        placeholder="Enter last name"
+                        value={student.studentLastName}
+
+                      />
+                      {errors[`studentLastName-${index}`] && (
+                        <p className="text-[#F04438] text-xs mt-1">{errors[`studentLastName-${index}`]}</p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Row 2 */}
+                  <div className="flex gap-4">
+                    <div className="w-1/2">
+                      <label className="block text-[16px] font-semibold">
+                        Date of Birth
+                      </label>
+                      <input
+                        type="text"
+                        id={`dob-${index}`}
+
+                        value={student.dateOfBirth || ""}
+                        onChange={(e) => {
+                          handleDOBChange(index, e.target.value);
+                          clearError(`dob-${index}`);
+                        }}
+                        className={`w-full mt-2 px-4 py-3 rounded-xl border
+              ${errors[`dob-${index}`] ? "border-[#F04438]" : "border-gray-300"}`}
+                        placeholder="DD/MM/YYYY (e.g. 15/10/2026)"
+                        maxLength={10}
+
+                      />
+                      {errors[`dob-${index}`] && (
+                        <p className="text-[#F04438] text-xs mt-1">{errors[`dob-${index}`]}</p>
+                      )}
+                    </div>
+                    <div className="w-1/2">
+                      <label className="block text-[16px] font-semibold">Age</label>
+                      <input
+                        type="text"
+                        value={student.age}
+                        readOnly
+                        className="w-full mt-2 border border-gray-300 rounded-xl px-4 py-3 text-base"
+                        placeholder="Automatic entry"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Row 3 */}
+                  <div className="flex gap-4">
+                    <div className="w-1/2">
+                      <label className="block text-[16px] font-semibold">Gender</label>
+                      <Select
+                        inputId={`gender-${index}`}
+                        className={`w-full mt-2 text-base ${errors[`gender-${index}`] ? "border-[#F04438] rounded-xl" : ""}`}
+                        classNamePrefix="react-select"
+                        placeholder="Select gender"
+                        value={genderOptions.find((option) => option.value === student.gender) || null}
+                        onChange={(opt) => {
+                          handleInputChange(index, "gender", opt?.value || "");
+                          clearError(`gender-${index}`);
+                        }}
+                        options={genderOptions}
+                      />
+                      {errors[`gender-${index}`] && (
+                        <p className="text-[#F04438] text-xs mt-1">{errors[`gender-${index}`]}</p>
+                      )}
+                    </div>
+                    <div className="w-1/2">
+                      <label className="block text-[16px] font-semibold">
+                        Medical information
+                      </label>
+
+                      <input
+                        type="text"
+                        id={`medicalInformation-${index}`}
+                        placeholder="Enter medical info"
+                        value={student.medicalInformation || ""}
+                        onChange={(e) => {
+                          handleInputChange(index, "medicalInformation", e.target.value);
+                          clearError(`medicalInformation-${index}`);
+                        }}
+                        className={`mt-2 w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500
+                        ${errors[`medicalInformation-${index}`] ? "border-[#F04438]" : "border-gray-300"}`}
+                      />
+                      {errors[`medicalInformation-${index}`] && (
+                        <p className="text-[#F04438] text-xs mt-1">{errors[`medicalInformation-${index}`]}</p>
+                      )}
+
+                    </div>
+                  </div>
+
+                  {/* Row 4 */}
+                  <div className="flex gap-4">
+
+                    {/* CLASS */}
+                    <div className="w-1/2">
+                      <label className="block text-[16px] font-semibold">Class/Level</label>
+
+                      {index === 0 ? (
+                        <input
+                          type="text"
+value={(() => {
+    const name = selectedClassData?.className || singleClassSchedulesOnly?.className || "";
+    const level = selectedClassData?.level || singleClassSchedulesOnly?.level || "";
+    return level ? `${name} (${level})` : name;
+})()}                          readOnly
+                          className="w-full mt-2 border border-gray-300 rounded-xl px-4 py-3"
+                        />
+                      ) : (
+                        <Select
+                          className="w-full mt-2 text-base"
+                          classNamePrefix="react-select"
+                          placeholder="Select class"
+                          options={venueClassOptions}
+                          value={
+                            venueClassOptions?.find(
+                              (opt) => opt.value === student.selectedClassId
+                            ) || null
+                          }
+                          onChange={(option) =>
+                            handleStudentClassChange(index, option)
+                          }
+                        />
+                      )}
+                    </div>
+
+                    {/* TIME */}
+                    <div className="w-1/2">
+                      <label className="block text-[16px] font-semibold">Time</label>
+
+                      <input
+                        type="text"
+                        readOnly
+                        value={
+                          index === 0
+                            ? `${selectedClassData?.startTime || singleClassSchedulesOnly?.startTime || ""} - ${selectedClassData?.endTime || singleClassSchedulesOnly?.endTime || ""}`
+                            : student.selectedClassData
+                              ? `${student.selectedClassData.startTime} - ${student.selectedClassData.endTime}`
+                              : ""
+                        }
+                        className="w-full mt-2 border border-gray-300 rounded-xl px-4 py-3"
+                        placeholder="Automatic entry"
+                      />
+                    </div>
+
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+
+            <div className="space-y-6 ">
+              {parents.map((parent, index) => (
+                <motion.div
+                  key={parent.id}
+                  initial={{ opacity: 0, y: 30 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.3, delay: index * 0.1 }}
+                  className={`bg-white mb-10 p-6 rounded-3xl shadow-sm space-y-6 relative ${students.length < 1 ? "" : "mt-10"
+                    }`}                                >
+                  {/* Top Header Row */}
+                  <div className="flex justify-between  items-start">
+                    <h2 className="text-[20px] font-semibold">
+                      {index === 0
+                        ? "Parent information"
+                        : `Parent ${index + 1} information`}
+                    </h2>
+                    <div className="flex items-center gap-2">
+                      {index === 0 && (
+                        <button
+                          onClick={handleAddParent}
+                          disabled={parents.length >= 3}
+                          className="text-white text-[14px] px-4 py-2 bg-blue-600 rounded-xl hover:bg-blue-700 disabled:opacity-50"
+                        >
+                          Add Parent
+                        </button>
+                      )}
+                      {index > 0 && (
+                        <button
+                          onClick={() => handleRemoveParent(parent.id)}
+                          className="text-gray-500 hover:text-[#B42318]"
+                        >
+                          <X className="w-5 h-5" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Row 1 */}
+                  <div className="flex gap-4">
+                    <div className="w-1/2">
+                      <label className="block text-[16px] font-semibold">First name</label>
+                      <input
+                        id={`parentFirstName-${index}`}
+                        className={`w-full mt-2 px-4 py-3 rounded-xl border
+              ${errors[`parentFirstName-${index}`] ? "border-[#F04438]" : "border-gray-300"}`}
+                        placeholder="Enter first name"
+                        value={parent.parentFirstName}
+                        onChange={(e) => {
+                          // Allow only alphabets and spaces
+                          const value = e.target.value.replace(/[^A-Za-z\s]/g, "");
+                          handleParentChange(index, "parentFirstName", value);
+                          clearError(`parentFirstName-${index}`);
+                        }}
+                        onKeyPress={(e) => {
+                          if (!/[A-Za-z\s]/.test(e.key)) e.preventDefault();
+                        }}
+                      />
+                      {errors[`parentFirstName-${index}`] && (
+                        <p className="text-[#F04438] text-xs mt-1">{errors[`parentFirstName-${index}`]}</p>
+                      )}
+                    </div>
+
+                    <div className="w-1/2">
+                      <label className="block text-[16px] font-semibold">Last name</label>
+                      <input
+                        id={`parentLastName-${index}`}
+                        className={`w-full mt-2 px-4 py-3 rounded-xl border
+              ${errors[`parentLastName-${index}`] ? "border-[#F04438]" : "border-gray-300"}`}
+                        placeholder="Enter last name"
+                        value={parent.parentLastName}
+                        onChange={(e) => {
+                          // Allow only alphabets and spaces
+                          const value = e.target.value.replace(/[^A-Za-z\s]/g, "");
+                          handleParentChange(index, "parentLastName", value);
+                          clearError(`parentLastName-${index}`);
+
+                        }}
+                        onKeyPress={(e) => {
+                          if (!/[A-Za-z\s]/.test(e.key)) e.preventDefault();
+                        }}
+                      />
+                      {errors[`parentLastName-${index}`] && (
+                        <p className="text-[#F04438] text-xs mt-1">{errors[`parentLastName-${index}`]}</p>
+                      )}
+                    </div>
+                  </div>
+
+
+                  {/* Row 2 */}
+                  <div className="flex gap-4">
+                    <div className="w-1/2">
+                      <label className="block text-[16px] font-semibold">Email</label>
+                      <input
+                        type="email"
+                        id={`parentEmail-${index}`}
+                        className={`w-full mt-2 px-4 py-3 rounded-xl border
+              ${errors[`parentEmail-${index}`] ? "border-[#F04438]" : "border-gray-300"}`}
+                        placeholder="Enter email address"
+                        value={parent.parentEmail}
+                        onChange={(e) => {
+                          clearError(`parentEmail-${index}`);
+                          handleParentChange(index, "parentEmail", e.target.value)
+                        }
+                        }
+                      />
+                      {errors[`parentEmail-${index}`] && (
+                        <p className="text-[#F04438] text-xs mt-1">{errors[`parentEmail-${index}`]}</p>
+                      )}
+                    </div>
+                    <div className="w-1/2">
+                      <label className="block text-[16px] font-semibold">Phone number</label>
+
+                      <div className={errors[`parentPhoneNumber-${index}`] ? "border border-[#F04438] rounded-xl bg-red-50" : ""}>
+                        <PhoneNumberInput
+                          id={`parentPhoneNumber-${index}`}
+                          value={parent.parentPhoneNumber}
+                          onChange={(fullNumber) => {
+                            handleParentChange(index, "parentPhoneNumber", fullNumber);
+                            clearError(`parentPhoneNumber-${index}`);
+                          }}
+                          placeholder="Enter phone number"
+                        />
+                      </div>
+                      {errors[`parentPhoneNumber-${index}`] && (
+                        <p className="text-[#F04438] text-xs mt-1">{errors[`parentPhoneNumber-${index}`]}</p>
+                      )}
+
+                    </div>
+                  </div>
+
+                  {/* Row 3 */}
+                  <div className="flex flex-col gap-4">
+                    {/* Interest Reason */}
+                    <div className="w-full">
+                      <label className="block text-[16px] font-semibold">
+                        What’s the main reason you’re interested in Samba Soccer Schools?
+                      </label>
+
+                      {parent.isCustomReason ? (
+                        <div className="relative">
+                          <input
+                            type="text"
+                            id={`interestReason-${index}`}
+                            placeholder="Please specify"
+                            value={parent.interestReason || ""}
+                            onChange={(e) => {
+                              handleParentChange(index, "interestReason", e.target.value);
+                              clearError(`interestReason-${index}`);
+                            }}
+                            className={`w-full mt-2 border rounded-xl px-4 py-3 pr-28 text-base
+                            ${errors[`interestReason-${index}`] ? "border-[#F04438]" : "border-gray-300"}`}
+                          />
+
+                          {/* Back Button */}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              handleParentChange(index, "interestReason", "");
+                              handleParentChange(index, "isCustomReason", false);
+                            }}
+                            className="absolute right-3 top-3/5 -translate-y-1/2 text-sm text-blue-600 font-medium"
+                          >
+                            Select
+                          </button>
+                        </div>
+                      ) : (
+                        <Select
+                          inputId={`interestReason-${index}`}
+                          options={interestReasonOptions}
+                          placeholder="Select a reason"
+                          className="mt-2"
+                          classNamePrefix="react-select"
+                          value={interestReasonOptions.find(
+                            (o) => o.value === parent.interestReason
+                          )}
+                          onChange={(selected) => {
+                            clearError(`interestReason-${index}`);
+                            if (selected.value === "Other") {
+                              handleParentChange(index, "interestReason", "");
+                              handleParentChange(index, "isCustomReason", true);
+                            } else {
+                              handleParentChange(index, "interestReason", selected.value);
+                              handleParentChange(index, "isCustomReason", false);
+                            }
+                          }}
+                          styles={{
+                            control: (base) => ({
+                              ...base,
+                              borderColor: errors[`interestReason-${index}`] ? "#ef4444" : base.borderColor,
+                            }),
+                          }}
+                        />
+                      )}
+                      {errors[`interestReason-${index}`] && (
+                        <p className="text-[#F04438] text-xs mt-1">{errors[`interestReason-${index}`]}</p>
+                      )}
+                    </div>
+
+                    {/* Tell Us Bit More */}
+                    <div className="w-full">
+                      <label className="block text-[16px] font-semibold">
+                        Tell us a bit more (optional)
+                      </label>
+
+                      <input
+                        type="text"
+                        placeholder="Anything else you'd like to share?"
+                        value={parent.interestReasonOther || ""}
+                        onChange={(e) =>
+                          handleParentChange(index, "interestReasonOther", e.target.value)
+                        }
+                        className="w-full mt-2 border border-gray-300 rounded-xl px-4 py-3 text-base"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex gap-4">
+                    <div className="w-1/2">
+                      <label className="block text-[16px] font-semibold">Relation to child</label>
+                      <Select
+                        inputId={`relationToChild-${index}`}
+                        options={relationOptions}
+                        placeholder="Select Relation"
+                        className="mt-2"
+                        classNamePrefix="react-select"
+                        value={relationOptions.find((o) => o.value === parent.relationToChild)}
+                        onChange={(selected) => {
+                          handleParentChange(index, "relationToChild", selected.value);
+                          clearError(`relationToChild-${index}`);
+                        }}
+                        styles={{
+                          control: (base) => ({
+                            ...base,
+                            borderColor: errors[`relationToChild-${index}`] ? "#ef4444" : base.borderColor,
+                          }),
+                        }}
+                      />
+                      {errors[`relationToChild-${index}`] && (
+                        <p className="text-[#F04438] text-xs mt-1">{errors[`relationToChild-${index}`]}</p>
+                      )}
+                    </div>
+                    <div className="w-1/2">
+                      <label className="block text-[16px] font-semibold">How did you hear about us?</label>
+                      <Select
+                        inputId={`howDidYouHear-${index}`}
+                        options={hearOptions}
+                        placeholder="Select from drop down"
+                        className="mt-2"
+                        classNamePrefix="react-select"
+                        value={hearOptions.find((o) => o.value === parent.howDidYouHear)}
+                        onChange={(selected) => {
+                          handleParentChange(index, "howDidYouHear", selected.value);
+                          clearError(`howDidYouHear-${index}`);
+                        }}
+                        styles={{
+                          control: (base) => ({
+                            ...base,
+                            borderColor: errors[`howDidYouHear-${index}`] ? "#ef4444" : base.borderColor,
+                          }),
+                        }}
+                      />
+                      {errors[`howDidYouHear-${index}`] && (
+                        <p className="text-[#F04438] text-xs mt-1">{errors[`howDidYouHear-${index}`]}</p>
+                      )}
+                    </div>
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+            <div className="bg-white p-6 rounded-3xl shadow-sm space-y-6">
+              <h2 className="text-[20px] font-semibold">Emergency contact details</h2>
+
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={emergency.sameAsAbove}
+                  onChange={() =>
+                    setEmergency(prev => ({
+                      ...prev,
+                      sameAsAbove: !prev.sameAsAbove
+                    }))
+                  }
+                />
+                <label className="text-base font-semibold text-gray-700">
+                  Fill same as above
+                </label>
+              </div>
+
+              <div className="flex gap-4">
+                <div className="w-1/2">
+                  <label className="block text-[16px] font-semibold">First name</label>
+                  <input
+                    id="emergencyFirstName"
+                    className={`w-full mt-2 border ${errors["emergencyFirstName"] ? "border-[#F04438]" : "border-gray-300"} rounded-xl px-4 py-3 text-base`}
+                    placeholder="Enter first name"
+                    value={emergency.emergencyFirstName}
+                    onChange={e =>
+                      setEmergency(prev => ({
+                        ...prev,
+                        emergencyFirstName: e.target.value
+                      }))
+                    }
+                  />
+                  {errors["emergencyFirstName"] && (
+                    <p className="text-[#F04438] text-xs mt-1">{errors["emergencyFirstName"]}</p>
+                  )}
+                </div>
+                <div className="w-1/2">
+                  <label className="block text-[16px] font-semibold">Last name</label>
+                  <input
+                    id="emergencyLastName"
+                    className={`w-full mt-2 border ${errors["emergencyLastName"] ? "border-[#F04438]" : "border-gray-300"} rounded-xl px-4 py-3 text-base`}
+                    placeholder="Enter last name"
+                    value={emergency.emergencyLastName}
+                    onChange={e =>
+                      setEmergency(prev => ({
+                        ...prev,
+                        emergencyLastName: e.target.value
+                      }))
+                    }
+                  />
+                  {errors["emergencyLastName"] && (
+                    <p className="text-[#F04438] text-xs mt-1">{errors["emergencyLastName"]}</p>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex gap-4">
+                <div className="w-1/2">
+                  <label className="block text-[16px] font-semibold">Phone number</label>
+                  <PhoneNumberInput
+                    id="emergencyPhoneNumber"
+                    value={emergency.emergencyPhoneNumber}
+                    onChange={(fullNumber) =>
+                      setEmergency(prev => ({ ...prev, emergencyPhoneNumber: fullNumber }))
+                    }
+
+                    placeholder="Enter phone number"
+                  />
+                  {errors["emergencyPhoneNumber"] && (
+                    <p className="text-[#F04438] text-xs mt-1">{errors["emergencyPhoneNumber"]}</p>
+                  )}
+                </div>
+                <div className="w-1/2">
+                  <label className="block text-[16px] font-semibold">Relation to child</label>
+                  <Select
+                    inputId="emergencyRelation"
+                    options={relationOptions}
+                    value={relationOptions.find(option => option.value === emergency.emergencyRelation)}
+                    onChange={selectedOption =>
+                      setEmergency(prev => ({
+                        ...prev,
+                        emergencyRelation: selectedOption?.value || ""
+                      }))
+                    }
+                    placeholder="Select Relation"
+                    className={`mt-2 ${errors["emergencyRelation"] ? "border-[#F04438] rounded-xl" : ""}`}
+                    classNamePrefix="react-select"
+                  />
+                  {errors["emergencyRelation"] && (
+                    <p className="text-[#F04438] text-xs mt-1">{errors["emergencyRelation"]}</p>
+                  )}
+                </div>
+              </div>
+            </div>
+            <div id="level" className="w-full py-3 px-5 border border-[#ccc] rounded-2xl my-10 react-select-container text-[20px] bg-white flex items-center justify-between">
+              <label className=" font-semibold  flex-1">
+                Level of interest
+              </label>
+
+              <div className="flex space-x-6 ">
+                {['Low', 'Medium', 'High'].map((level) => (
+                  <label key={level} className="  inline-flex items-center font-normal cursor-pointer">
+                    <input
+                      type="radio"
+                      name="levelOfInterest"
+                      value={level}
+                      checked={selectedLevelOfInterest === level}
+                      onChange={() => setSelectedLevelOfInterest(level)}
+                      className="  form-radio text-indigo-600 focus:ring-indigo-500"
+                    />
+                    <span className="ml-2  text-lg  text-gray-800">{level}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+            {errors["level"] && (
+              <p className="text-[#F04438] text-sm mt-[-30px] mb-[20px] ml-5">{errors["level"]}</p>
+            )}
+
+            {/* Premium Key Information Accordion */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="w-full my-10 bg-white border border-blue-100 rounded-[2rem] shadow-[0_10px_40px_-15px_rgba(0,0,0,0.05)] overflow-hidden"
+            >
+              {/* Accordion Header */}
+              <button
+                onClick={() => setIsOpen(!isOpen)}
+                className="w-full flex items-center justify-between p-8 hover:bg-blue-50/30 transition-colors duration-300 relative overflow-hidden group"
+              >
+                {/* Decorative background element */}
+                <div className="absolute top-0 right-0 w-32 h-32 bg-blue-50 rounded-full -mr-16 -mt-16 opacity-50 group-hover:scale-110 transition-transform duration-500" />
+
+                <div className="flex items-center gap-3 relative text-left">
+                  <div className="p-2 bg-blue-600 rounded-lg shadow-lg shadow-blue-200">
+                    <Info className="w-6 h-6 text-white" />
+                  </div>
+                  <h2 className="text-[24px] font-bold text-gray-900 leading-tight">Key Information</h2>
+                </div>
+
+                <div className="relative">
+                  <motion.div
+                    animate={{ rotate: isOpen ? 180 : 0 }}
+                    transition={{ duration: 0.3 }}
+                  >
+                    <ChevronDown className="w-6 h-6 text-gray-400 group-hover:text-blue-600 transition-colors" />
+                  </motion.div>
+                </div>
+              </button>
+
+              {/* Accordion Content */}
+              <AnimatePresence>
+                {isOpen && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: "auto", opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.4, ease: "easeInOut" }}
+                  >
+                    <div className="p-8 pt-0 relative border-t border-gray-50">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 relative pt-6">
+
+                        {waitingListKeyInfo ? (
+                          renderContent(JSON.parse(waitingListKeyInfo))
+                        ) : (
+                          <div className="text-gray-500 italic py-4 col-span-2 text-center bg-gray-50 rounded-2xl border border-dashed border-gray-200">
+                            No key information available for this service.
+                          </div>
+                        )}
+
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </motion.div>
+
+
+            <div className="flex justify-end  mb-10 gap-4">
+              <button
+                type="button"
+                className="flex items-center justify-center gap-1 border border-[#717073] text-[#717073] px-12 text-[18px]  py-2 rounded-lg font-semibold bg-none"
+              >
+                Cancel
+              </button>
+
+              <button
+                type="submit"
+                onClick={handleSubmit}
+                disabled={isSubmitting || isBooked}
+                className={`${isBooked
+                  ? "bg-[#027A48] border-[#027A48] cursor-default"
+                  : isSubmitting
+                    ? "bg-gray-400 border-gray-400 cursor-not-allowed"
+                    : "bg-[#237FEA] border-[#237FEA] hover:bg-[#1f6dc9] cursor-pointer"
+                  } text-white text-[18px] font-semibold border px-6 py-3 rounded-lg transition`}
+              >
+                {isBooked
+                  ? "Booked" : isSubmitting ? "Submitting..." : "Add to Waiting List "}
+
+              </button>
+
+            </div>
+            <Comments
+              adminInfo={adminInfo}
+              comment={comment}
+              setComment={setComment}
+              handleSubmitComment={handleSubmitComment}
+              loadingComment={loadingComment}
+              commentsList={commentsList}
+              currentComments={[...tempComments, ...(currentComments || [])]}
+
+              formatTimeAgo={formatTimeAgo}
+            />
+
+          </div>
+        </div>
+
+      </div>
+
+    </div >
+  );
+};
+
+export default AddtoWaitingList;
