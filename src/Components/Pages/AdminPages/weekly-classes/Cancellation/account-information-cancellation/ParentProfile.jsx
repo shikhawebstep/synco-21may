@@ -484,7 +484,7 @@ const ParentProfile = ({ ParentProfile }) => {
                                 {/* Row 3 */}
                                 <div className="flex gap-4">
 
-                                    <div className="w-1/2">
+                                    <div className="w-2/2">
                                         <label className="block text-[16px] font-semibold">How did you hear about us?</label>
                                         <select
                                             className="w-full mt-2 border border-gray-300 rounded-xl px-4 py-3 text-base"
@@ -1249,7 +1249,7 @@ const ParentProfile = ({ ParentProfile }) => {
                                             // If all validations pass → call submit function
                                             cancelMembershipSubmit(cancelData, "allMembers", selectedStudents);
                                         }}
-                                        className="w-1/2 bg-[#fef2f2] text-white rounded-xl py-3 text-[18px] font-medium hover:shadow-md transition-shadow"
+                                        className="w-1/2 text-white bg-red-500 rounded-xl py-3 text-[18px] font-medium hover:shadow-md transition-shadow"
                                     >
                                         {cancelData.cancellationType !== "immediate"
                                             ? "Request to Cancel"

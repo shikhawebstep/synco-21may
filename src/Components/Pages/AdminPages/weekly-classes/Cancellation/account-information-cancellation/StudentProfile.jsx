@@ -430,16 +430,20 @@ const StudentProfile = ({ StudentProfile }) => {
                                         <select
                                             name="abilityLevel"
                                             id="abilityLevel"
+                                            disabled
                                             className="w-full mt-2 text-gray-500 border  border-gray-300 rounded-xl px-4 py-3 text-base"
-                                            defaultValue=""
-                                        >
+                                            value={
+                                                student?.abilityLevel ??
+                                                student?.classSchedule?.level ??
+                                                ""
+                                            }                                        >
                                             <option className="" value="" disabled>
                                                 Select Ability level
                                             </option>
                                             <option value="beginner">Beginner</option>
                                             <option value="intermediate">Intermediate</option>
                                             <option value="advanced">Advanced</option>
-                                                <option value="pro">Pro</option>
+                                            <option value="pro">Pro</option>
                                         </select>
 
                                     </div>
@@ -1200,7 +1204,7 @@ const StudentProfile = ({ StudentProfile }) => {
                                             // If all validations pass → call submit function
                                             cancelMembershipSubmit(cancelData, "allMembers");
                                         }}
-                                        className="w-1/2 bg-[#fef2f2] text-white rounded-xl py-3 text-[18px] font-medium hover:shadow-md transition-shadow"
+                                        className="w-1/2 text-white bg-red-500 rounded-xl py-3 text-[18px] font-medium hover:shadow-md transition-shadow"
                                     >
                                         {cancelData.cancellationType !== "immediate"
                                             ? "Request to Cancel"

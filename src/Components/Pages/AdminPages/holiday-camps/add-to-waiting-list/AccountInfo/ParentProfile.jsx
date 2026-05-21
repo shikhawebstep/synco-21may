@@ -1275,7 +1275,7 @@ const ParentProfile = ({ profile }) => {
                                             // If all validations pass → call submit function
                                             cancelMembershipSubmit(cancelData, "allMembers");
                                         }}
-                                        className="w-1/2 bg-[#fef2f2] text-white rounded-xl py-3 text-[18px] font-medium hover:shadow-md transition-shadow"
+                                        className="w-1/2 text-white bg-red-500 rounded-xl py-3 text-[18px] font-medium hover:shadow-md transition-shadow"
                                     >
                                         {cancelData.cancellationType !== "immediate"
                                             ? "Request to Cancel"

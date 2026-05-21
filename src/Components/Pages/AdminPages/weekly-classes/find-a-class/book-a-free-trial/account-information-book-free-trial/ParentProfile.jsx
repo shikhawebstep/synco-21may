@@ -1457,7 +1457,7 @@ const ParentProfile = ({ ParentProfile }) => {
                                 <div className="flex justify-end gap-4 pt-4">
                                     <button
                                         onClick={handleCancel}
-                                        className="w-1/2 bg-[#fef2f2] text-white rounded-xl py-3 text-[18px] font-medium hover:shadow-md transition-shadow"
+                                        className="w-1/2 text-white bg-red-500 rounded-xl py-3 text-[18px] font-medium hover:shadow-md transition-shadow"
                                     >
                                         Cancel Trial
                                     </button>

@@ -590,9 +590,9 @@ const List = () => {
         comesFrom === "" || comesFrom === null || comesFrom === undefined;
 
 
-  const venueClassOptions = !isEmpty
-    ? allClasses?.map((cls) => ({ value: cls.id, label: `${cls.className} (${cls.level ?? cls.levelName ?? cls.classLevel ?? ''})` }))
-    : classesWithCapacity?.map((cls) => ({ value: cls.id, label: `${cls.className} (${cls.level ?? cls.levelName ?? cls.classLevel ?? ''})` }));
+    const venueClassOptions = !isEmpty
+        ? allClasses?.map((cls) => ({ value: cls.id, label: `${cls.className} (${cls.level ?? cls.levelName ?? cls.classLevel ?? ''})` }))
+        : classesWithCapacity?.map((cls) => ({ value: cls.id, label: `${cls.className} (${cls.level ?? cls.levelName ?? cls.classLevel ?? ''})` }));
 
     const handlePlanChange = (plan) => {
         setMembershipPlan(plan);
@@ -1148,7 +1148,10 @@ const List = () => {
                 };
             }),
 
-            parents: parents.map(({ id, ...rest }) => rest),
+            parents: parents.map(({ id, ...rest }) => ({
+                ...rest,
+                id: comesFrom ? id : '',
+            })),
             starterPack:
                 singleClassSchedulesOnly?.venue?.starterPack &&
                     comesFrom !== "cancellation"
@@ -1157,10 +1160,10 @@ const List = () => {
             discountId: appliedDiscount?.data?.discountId || null,
             size: parents[0]?.starterPackSize || null,
             emergency: emergency
-                ? (() => {
-                    const { id, ...rest } = emergency;
-                    return rest;
-                })()
+                ? (({ comesFrom, id, ...rest }) => ({
+                    ...rest,
+                    id: comesFrom ? id : ''
+                }))(emergency)
                 : emergency,
             paymentPlanId: membershipPlan?.value ?? null,
 
