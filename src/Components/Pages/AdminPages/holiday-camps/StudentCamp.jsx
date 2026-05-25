@@ -373,7 +373,7 @@ const exportToExcel = () => {
                     : "N/A",
                 Source: camp?.bookedByAdmin
                     ? `${camp.bookedByAdmin.firstName} ${camp.bookedByAdmin.lastName}`
-                    : "N/A",
+                    : camp?.marketingChannel,
                 Status: camp.status,
                 "Primary Student": index === 0 ? "Yes" : "No",
             });
@@ -645,7 +645,7 @@ const exportToExcel = () => {
                                                         <td className="py-3 px-4 whitespace-nowrap">
                                                             {camp?.bookedByAdmin
                                                                 ? camp.bookedByAdmin.firstName + " " + camp.bookedByAdmin.lastName
-                                                                : "N/A"}
+                                                                : camp?.marketingChannel}
                                                         </td>
 
                                                         <td className="py-3 px-4 whitespace-nowrap">
@@ -709,9 +709,9 @@ const exportToExcel = () => {
                                                                                 </td>
 
                                                                                 <td className="py-3 px-4 whitespace-nowrap">
-                                                                                    {camp?.bookedByAdmin
-                                                                                        ? camp.bookedByAdmin.firstName + " " + camp.bookedByAdmin.lastName
-                                                                                        : "N/A"}
+                                                                               {camp?.bookedByAdmin
+  ? `${camp.bookedByAdmin.firstName || ""} ${camp.bookedByAdmin.lastName || ""}`.trim()
+  : camp?.marketingChannel || ""}
                                                                                 </td>
                                                                             </tr>
                                                                         ))}

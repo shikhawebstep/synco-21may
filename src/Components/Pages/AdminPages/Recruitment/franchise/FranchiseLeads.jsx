@@ -487,7 +487,7 @@ const FranchiseLeads = () => {
         [filteredRecruitment, startIndex, endIndex]
     );
 
-    useEffect(() => { setCurrentPage(1); }, [searchQuery]);
+    useEffect(() => { setCurrentPage(1); }, []);
 
     const filterByName = (data) => {
         if (!studentName.trim()) return data;
@@ -504,7 +504,7 @@ const FranchiseLeads = () => {
         data = filterByName(data);
         data = filterBySearchQuery(data);
         setFilteredRecruitment(data);
-    }, [recruitment, studentName, searchQuery]);
+    }, [recruitment, studentName, ]);
 
     const exportToExcel = () => {
         if (!currentData || currentData.length === 0) return;

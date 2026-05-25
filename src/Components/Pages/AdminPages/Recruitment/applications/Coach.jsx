@@ -577,7 +577,7 @@ const Coach = () => {
 
     useEffect(() => {
         setCurrentPage(1);
-    }, [searchQuery]);
+    }, []);
 
     useEffect(() => {
         if (!Array.isArray(recruitment)) return;
@@ -586,7 +586,7 @@ const Coach = () => {
         data = filterByVenue(data);
         data = filterBySearchQuery(data);
         setFilteredRecruitment(data);
-    }, [recruitment, studentName, selectedVenue, searchQuery]);
+    }, [recruitment, studentName, selectedVenue, ]);
 
     if (loading) return <Loader />;
 

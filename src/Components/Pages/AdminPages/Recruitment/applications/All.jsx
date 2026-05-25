@@ -611,7 +611,7 @@ const All = () => {
     );
     useEffect(() => {
         setCurrentPage(1);
-    }, [searchQuery]);
+    }, []);
     useEffect(() => {
         if (!Array.isArray(recruitment)) return;
 
@@ -622,7 +622,7 @@ const All = () => {
         data = filterBySearchQuery(data); // ✅ ADD THIS
 
         setFilteredRecruitment(data);
-    }, [recruitment, studentName, selectedVenue, searchQuery]);
+    }, [recruitment, studentName, selectedVenue]);
 
 
 

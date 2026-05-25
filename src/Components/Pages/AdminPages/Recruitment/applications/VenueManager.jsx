@@ -644,7 +644,7 @@ const filterBySearchQuery = (data) => {
     );
     useEffect(() => {
         setCurrentPage(1);
-    }, [searchQuery]);
+    }, []);
     useEffect(() => {
         if (!Array.isArray(venueRecruitment)) return;
 
@@ -655,7 +655,7 @@ const filterBySearchQuery = (data) => {
         data = filterBySearchQuery(data); // ✅ ADD THIS
 
         setFilteredRecruitment(data);
-    }, [venueRecruitment, studentName, selectedVenue, searchQuery]);
+    }, [venueRecruitment, studentName, selectedVenue]);
 
 
 
