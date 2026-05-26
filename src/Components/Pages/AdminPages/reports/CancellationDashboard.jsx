@@ -33,6 +33,14 @@ const CancellationDashboard = () => {
     const [activeTab, setActiveTab] = useState("age");
     const [membersData, setMembersData] = useState([]);
     const [loading, setLoading] = useState(false);
+    const [selectedFranchise, setSelectedFranchise] = useState(null);
+    const storedFranchises = localStorage.getItem('franchisesInfo');
+    const franchises = storedFranchises && storedFranchises !== 'undefined' ? JSON.parse(storedFranchises) : [];
+    const franchiseOptions = franchises.map(f => ({
+        label: (f.firstName + ' ' + (f.lastName || '')).trim() || f.email,
+        value: f.id
+    }));
+
     const ageData = [
         { label: "4", value: 60 },
         { label: "5", value: 70 },
@@ -360,7 +368,15 @@ const CancellationDashboard = () => {
     const radius = 90;
     const circumference = Math.PI * radius;
     const offset = circumference - (progress / 100) * circumference;
+        useEffect(() => {
+        const handleAccountSwitched = () => {
+            if (typeof fetchData === 'function') fetchData();
+        };
+        window.addEventListener('accountSwitched', handleAccountSwitched);
+        return () => window.removeEventListener('accountSwitched', handleAccountSwitched);
+    }, [fetchData]);
     if (loading) return (<><Loader /></>)
+
 
     return (
         <div className="lg:p-6 bg-gray-50 min-h-screen">
@@ -368,7 +384,21 @@ const CancellationDashboard = () => {
             <div className="flex flex-wrap justify-between items-center mb-6">
                 <h1 className="text-3xl font-semibold text-gray-800">Cancellations</h1>
                 <div className="flex flex-wrap gap-3 items-center">
+                    
                     <Select
+                        options={franchiseOptions}
+                        value={selectedFranchise}
+                        onChange={(selected) => {
+                            setSelectedFranchise(selected);
+                            if (typeof handleFilterChange === 'function') handleFilterChange('franchiseId', selected?.value || '');
+                        }}
+                        placeholder='Organization / Franchise'
+                        styles={typeof customSelectStyles !== 'undefined' ? customSelectStyles : undefined}
+                        isClearable
+                        components={{ IndicatorSeparator: () => null }}
+                        className='md:w-50'
+                    />
+<Select
                         options={
                             membersData?.allVenues
                                 ? [{ value: "", label: "All venues" }].concat(

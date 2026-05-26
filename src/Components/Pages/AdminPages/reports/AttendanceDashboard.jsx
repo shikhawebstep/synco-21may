@@ -32,6 +32,14 @@ const AttendanceDashboard = () => {
     const [analytics, setAnalytics] = useState(null);
     const [allClasses, setAllClasses] = useState([]);
     const [loading, setLoading] = useState(false);
+    const [selectedFranchise, setSelectedFranchise] = useState(null);
+    const storedFranchises = localStorage.getItem('franchisesInfo');
+    const franchises = storedFranchises && storedFranchises !== 'undefined' ? JSON.parse(storedFranchises) : [];
+    const franchiseOptions = franchises.map(f => ({
+        label: (f.firstName + ' ' + (f.lastName || '')).trim() || f.email,
+        value: f.id
+    }));
+
     console.log('allClasses', allClasses)
     // Select options (use dynamic venues/classes from API when loaded)
     const staticVenueOptions = [
@@ -297,6 +305,13 @@ const previousYearKey = "PreviousYear";
     // colors for pies
     const pieColors = ["#8B5CF6", "#FACC15", "#22C55E", "#3B82F6", "#EF4444", "#06B6D4"];
 
+        useEffect(() => {
+        const handleAccountSwitched = () => {
+            if (typeof fetchData === 'function') fetchData();
+        };
+        window.addEventListener('accountSwitched', handleAccountSwitched);
+        return () => window.removeEventListener('accountSwitched', handleAccountSwitched);
+    }, [fetchData]);
     if (loading) return <Loader />;
 
     return (
@@ -305,7 +320,21 @@ const previousYearKey = "PreviousYear";
             <div className="flex flex-wrap justify-between items-center mb-6">
                 <h1 className="text-3xl font-semibold text-gray-800">Attendance</h1>
                 <div className="flex flex-wrap gap-3 items-center">
-                    {/* VENUE SELECT */}
+                    
+                    <Select
+                        options={franchiseOptions}
+                        value={selectedFranchise}
+                        onChange={(selected) => {
+                            setSelectedFranchise(selected);
+                            if (typeof handleFilterChange === 'function') handleFilterChange('franchiseId', selected?.value || '');
+                        }}
+                        placeholder='Organization / Franchise'
+                        styles={typeof customSelectStyles !== 'undefined' ? customSelectStyles : undefined}
+                        isClearable
+                        components={{ IndicatorSeparator: () => null }}
+                        className='md:w-50'
+                    />
+{/* VENUE SELECT */}
                     <Select
                         options={
                             analytics?.allVenues
